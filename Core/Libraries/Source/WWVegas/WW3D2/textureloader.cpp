@@ -59,6 +59,7 @@
 #include "ddsfile.h"
 #include "bitmaphandler.h"
 #include "wwprofile.h"
+#include <cstdio>
 
 bool TextureLoader::TextureLoadSuspended;
 int TextureLoader::TextureInactiveOverrideTime = 0;
@@ -1316,6 +1317,12 @@ void TextureLoadTaskClass::Apply_Missing_Texture()
 	{
 		return;
 	}
+
+#ifdef __EMSCRIPTEN__
+	// Keep the failing asset name visible in browser stderr. This is cheap and
+	// makes any remaining magenta texture traceable to a concrete file.
+	fprintf(stderr, "[TEX_MISSING] %s\n", Texture->Get_Full_Path().str());
+#endif
 
 	D3DTexture = MissingTexture::_Get_Missing_Texture();
 	if (D3DTexture == nullptr)

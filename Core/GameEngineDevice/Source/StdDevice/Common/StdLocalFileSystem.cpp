@@ -33,6 +33,7 @@
 #include "StdDevice/Common/StdLocalFile.h"
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 
 #ifndef _WIN32
@@ -313,7 +314,13 @@ void StdLocalFileSystem::getFileListInDirectory(const AsciiString& currentDirect
 
 	while (!done)	{
 		std::string filenameStr = iter->path().filename().string();
-		if (!iter->is_directory() && iter->path().extension() == searchExt &&
+		std::string entryExt = iter->path().extension().string();
+		std::string wantedExt = searchExt.string();
+#ifndef _WIN32
+		std::transform(entryExt.begin(), entryExt.end(), entryExt.begin(), [](unsigned char c){ return (char)std::tolower(c); });
+		std::transform(wantedExt.begin(), wantedExt.end(), wantedExt.begin(), [](unsigned char c){ return (char)std::tolower(c); });
+#endif
+		if (!iter->is_directory() && entryExt == wantedExt &&
 			(strcmp(filenameStr.c_str(), ".") != 0 && strcmp(filenameStr.c_str(), "..") != 0)) {
 			// if we haven't already, add this filename to the list.
 			// a stl set should only allow one copy of each filename
@@ -342,9 +349,19 @@ void StdLocalFileSystem::getFileListInDirectory(const AsciiString& currentDirect
 			std::string filenameStr = iter->path().filename().string();
 			if(iter->is_directory() &&
 				(strcmp(filenameStr.c_str(), ".") != 0 && strcmp(filenameStr.c_str(), "..") != 0)) {
-				AsciiString tempsearchstr(filenameStr.c_str());
+				AsciiString tempsearchstr = currentDirectory;
+				if (!tempsearchstr.isEmpty() && !tempsearchstr.endsWith("/") && !tempsearchstr.endsWith("\\")) {
+#ifdef _WIN32
+					tempsearchstr.concat("\\");
+#else
+					tempsearchstr.concat("/");
+#endif
+				}
+				tempsearchstr.concat(filenameStr.c_str());
 
-				// recursively add files in subdirectories if required.
+				// Recurse from the actual current directory. The old code dropped
+				// the parent path and searched relative to CWD, which could skip
+				// nested BIG archives on OPFS/Linux.
 				getFileListInDirectory(tempsearchstr, originalDirectory, searchName, filenameList, searchSubdirectories);
 			}
 

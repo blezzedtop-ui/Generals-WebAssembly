@@ -37,6 +37,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include "webgl_pipeline.h"
 
@@ -45,6 +48,36 @@
 // ---------------------------------------------------------------------------
 
 static bool g_trace = false;
+
+// Query actual browser S3TC support before DX8Caps enumerates texture formats.
+// iPhone/iPad Safari often exposes WebGL2 without WEBGL_compressed_texture_s3tc.
+// Previously CheckDeviceFormat always claimed DXT1-5 support, so the engine kept
+// textures compressed and the WebGL uploader replaced unsupported DXT levels
+// with magenta. When S3TC is absent we now report DXT as unsupported so the
+// existing DDS loader CPU-decompresses them into ordinary RGBA/RGB surfaces.
+static bool BrowserSupportsS3TC()
+{
+#ifdef __EMSCRIPTEN__
+	static int cached = -1;
+	if (cached < 0) {
+		cached = MAIN_THREAD_EM_ASM_INT({
+			try {
+				const c = document.createElement('canvas');
+				c.width = 1; c.height = 1;
+				const gl = c.getContext('webgl2', { antialias: false, alpha: false });
+				if (!gl) return 0;
+				return gl.getExtension('WEBGL_compressed_texture_s3tc') ? 1 : 0;
+			} catch (e) {
+				return 0;
+			}
+		});
+		fprintf(stderr, "[d3d8webgl] browser S3TC capability=%d\n", cached);
+	}
+	return cached != 0;
+#else
+	return true;
+#endif
+}
 
 #define D3D8WEBGL_TRACE_CALL(...)                 \
 	do {                                          \
@@ -1655,6 +1688,7 @@ public:
 		case D3DFMT_DXT3:
 		case D3DFMT_DXT4:
 		case D3DFMT_DXT5:
+			return BrowserSupportsS3TC() ? D3D_OK : D3DERR_NOTAVAILABLE;
 		case D3DFMT_D16:
 		case D3DFMT_D24S8:
 		case D3DFMT_D24X8:
