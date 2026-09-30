@@ -102,6 +102,23 @@ function gxInstallKeyGuard() {
   window.addEventListener('keydown', window.gxKeyGuard, { capture: true });
 }
 
+function gxSyncIPhoneCanvas() {
+  const cv = document.getElementById('canvas');
+  if (!cv || navigator.maxTouchPoints < 1) return;
+  const vv = window.visualViewport;
+  const w = Math.max(1, Math.round(vv ? vv.width : window.innerWidth));
+  const h = Math.max(1, Math.round(vv ? vv.height : window.innerHeight));
+  document.documentElement.style.setProperty('--gx-vw', w + 'px');
+  document.documentElement.style.setProperty('--gx-vh', h + 'px');
+  // Let SDL own the backing buffer once its window exists; before that keep
+  // the HTML canvas aspect ratio aligned with the visible iPhone viewport.
+  if (!window.Module || !window.Module.calledRun) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(w * dpr);
+    cv.height = Math.round(h * dpr);
+  }
+}
+
 function gxEngineStage(message) {
   console.log('[stage]', message);
   const d = document.getElementById('gx-detail');
@@ -118,6 +135,9 @@ async function gxStartGame() {
   gxInstallKeyGuard();
   // And the focus guard (minimize/restore resilience).
   gxInstallFocusGuard();
+  gxSyncIPhoneCanvas();
+  window.visualViewport?.addEventListener('resize', gxSyncIPhoneCanvas);
+  window.addEventListener('orientationchange', () => setTimeout(gxSyncIPhoneCanvas, 180));
 
   return new Promise((resolve, reject) => {
     const canvas = document.getElementById('canvas');
