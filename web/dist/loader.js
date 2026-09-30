@@ -444,7 +444,7 @@ async function gxBoot() {
     btn.style.display = 'inline-block';
 
     const zipBtn=document.getElementById('gx-zip-import'), zipFile=document.getElementById('gx-zip-file');
-    if(zipBtn&&zipFile){zipBtn.addEventListener('click',()=>zipFile.click());zipFile.addEventListener('change',async()=>{zipBtn.disabled=true;btn.disabled=true;document.getElementById('gx-progress-wrap').style.display='block';try{const r=await gxImportCombinedZip(storage,zipFile.files[0]);gxUI.detail.textContent='ZIP ready: Zero Hour '+r.zhCount+' + Generals '+r.baseCount+' files ('+gxHuman(r.bytes)+').';zipBtn.textContent='✓ ZIP imported';btn.disabled=false;}catch(e){gxUI.error(e&&e.message?e.message:String(e));zipBtn.disabled=false;btn.disabled=false;}});}
+    if(zipBtn&&zipFile){ zipFile.addEventListener('change',async()=>{zipBtn.disabled=true;btn.disabled=true;document.getElementById('gx-progress-wrap').style.display='block';try{const r=await gxImportCombinedZip(storage,zipFile.files[0]);gxUI.detail.textContent='ZIP ready: Zero Hour '+r.zhCount+' + Generals '+r.baseCount+' files ('+gxHuman(r.bytes)+').';zipBtn.textContent='✓ ZIP imported';btn.disabled=false;}catch(e){gxUI.error(e&&e.message?e.message:String(e));zipBtn.disabled=false;btn.disabled=false;}});}
 
     const combinedBtn = document.getElementById('gx-combined-import');
     const combinedFolder = document.getElementById('gx-combined-folder');
