@@ -277,6 +277,25 @@ function gxLocalRelativePath(file) {
   return parts.join('/');
 }
 
+async function gxImportCombinedZip(storage, zipFile) {
+  if (!zipFile) throw new Error('Select a ZIP file.');
+  if (!('DecompressionStream' in window)) throw new Error('This Safari version cannot unpack ZIP files.');
+  const u8=new Uint8Array(await zipFile.arrayBuffer());
+  const dv=new DataView(u8.buffer); const entries=[]; let p=0;
+  while(p+30<=u8.length && dv.getUint32(p,true)===0x04034b50){
+    const flags=dv.getUint16(p+6,true), method=dv.getUint16(p+8,true), csize=dv.getUint32(p+18,true), usize=dv.getUint32(p+22,true), nl=dv.getUint16(p+26,true), xl=dv.getUint16(p+28,true);
+    if(flags&8) throw new Error('ZIP uses data descriptors; recreate it with standard ZIP settings.');
+    const name=new TextDecoder().decode(u8.subarray(p+30,p+30+nl)).replace(/\\/g,'/'); const start=p+30+nl+xl;
+    if(!name.endsWith('/')) entries.push({name,method,csize,usize,start}); p=start+csize;
+  }
+  const rootFor=re=>{const e=entries.find(x=>re.test(x.name)); if(!e)return null; return e.name.slice(0,e.name.lastIndexOf('/')+1);};
+  const zhRoot=rootFor(/(^|\\/)INIZH\\.big$/i), baseRoot=rootFor(/(^|\\/)(Terrain|Textures|W3D)\\.big$/i);
+  if(zhRoot===null||baseRoot===null||zhRoot===baseRoot) throw new Error('ZIP must contain separate Generals and Zero Hour folders.');
+  const chosen=entries.filter(x=>x.name.startsWith(zhRoot)||x.name.startsWith(baseRoot)); let done=0,zhCount=0,baseCount=0; const total=chosen.reduce((n,x)=>n+x.usize,0); gxUI.download(0,total); if(storage.requestPersist) await storage.requestPersist();
+  for(let i=0;i<chosen.length;i++){const e=chosen[i]; let path=e.name.startsWith(zhRoot)?e.name.slice(zhRoot.length):'GameDataGenerals/'+e.name.slice(baseRoot.length); if(!path||path.includes('../'))continue; let blob=new Blob([u8.slice(e.start,e.start+e.csize)]); if(e.method===8){blob=await new Response(blob.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();} else if(e.method!==0) throw new Error('Unsupported ZIP compression method '+e.method+' for '+e.name); await storage.writeBlob(path,blob); done+=blob.size; e.name.startsWith(zhRoot)?zhCount++:baseCount++; gxUI.download(done,total,'Unpacking ZIP '+(i+1)+' / '+chosen.length+': '+path); gxUI.unpack(i+1,chosen.length); if((i&3)===3)await new Promise(r=>setTimeout(r,0));}
+  await storage.writeMeta('installed-default_ru',{complete:true,files:zhCount,ts:Date.now(),source:'combined-zip'}); await storage.writeMeta('installed-base-generals',{complete:true,files:baseCount,ts:Date.now(),source:'combined-zip'}); return {files:chosen.length,bytes:done,zhCount,baseCount};
+}
+
 async function gxImportCombinedFolder(storage, files) {
   const list = Array.from(files || []).filter(f => f && f.size >= 0);
   if (!list.length) throw new Error('No files selected.');
@@ -423,6 +442,9 @@ async function gxBoot() {
 
     const btn = document.getElementById('gx-play');
     btn.style.display = 'inline-block';
+
+    const zipBtn=document.getElementById('gx-zip-import'), zipFile=document.getElementById('gx-zip-file');
+    if(zipBtn&&zipFile){zipBtn.addEventListener('click',()=>zipFile.click());zipFile.addEventListener('change',async()=>{zipBtn.disabled=true;btn.disabled=true;document.getElementById('gx-progress-wrap').style.display='block';try{const r=await gxImportCombinedZip(storage,zipFile.files[0]);gxUI.detail.textContent='ZIP ready: Zero Hour '+r.zhCount+' + Generals '+r.baseCount+' files ('+gxHuman(r.bytes)+').';zipBtn.textContent='✓ ZIP imported';btn.disabled=false;}catch(e){gxUI.error(e&&e.message?e.message:String(e));zipBtn.disabled=false;btn.disabled=false;}});}
 
     const combinedBtn = document.getElementById('gx-combined-import');
     const combinedFolder = document.getElementById('gx-combined-folder');
