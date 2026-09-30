@@ -509,6 +509,11 @@ async function gxBoot() {
       });
     }
 
+    const quickGame=document.getElementById('gx-game-select');
+    if(quickGame){quickGame.value=localStorage.getItem('gx-game')||'default_ru';quickGame.addEventListener('change',()=>localStorage.setItem('gx-game',quickGame.value));}
+    const quickWipe=document.getElementById('gx-wipe-quick');
+    if(quickWipe){let armed=false;quickWipe.addEventListener('click',async()=>{if(!armed){armed=true;quickWipe.textContent='⚠️ Yana bosing: hammasini o‘chirish';setTimeout(()=>{armed=false;quickWipe.textContent='🗑 Очистить все данные';},4000);return;}quickWipe.disabled=true;quickWipe.textContent='Tozalanmoqda…';try{await gxWipeAllStorage();location.reload();}catch(e){gxUI.error(e&&e.message?e.message:String(e));quickWipe.disabled=false;}});}
+
     const settingsBtn = document.getElementById('gx-settings-btn');
     const settingsBox = document.getElementById('gx-settings');
     const fpsSel = document.getElementById('gx-fps');
@@ -585,7 +590,8 @@ async function gxBoot() {
     settingsBtn.style.display = 'none';
     settingsBox.hidden = true;
 
-    const build = localStorage.getItem('gx-build') || 'default_ru';
+    const selectedGame = localStorage.getItem('gx-game') || 'default_ru';
+    const build = selectedGame === 'generals' ? 'default_ru' : (localStorage.getItem('gx-build') || 'default_ru');
     const markerKey = 'installed-' + build;
 
     // Stage 1: download the engine (wasm) into memory, with progress. Always
