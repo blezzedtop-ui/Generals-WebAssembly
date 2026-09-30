@@ -277,6 +277,42 @@ function gxLocalRelativePath(file) {
   return parts.join('/');
 }
 
+async function gxImportBaseGeneralsFolder(storage, files) {
+  const list = Array.from(files || []).filter(f => f && f.size >= 0);
+  if (!list.length) throw new Error('No files selected.');
+
+  const rel = list.map(gxLocalRelativePath);
+  const bigNames = new Set(rel.filter(p => /(^|\/)[^/]+\.big$/i.test(p)).map(p => p.split('/').pop().toLowerCase()));
+  const requiredAny = ['terrain.big', 'textures.big', 'w3d.big'];
+  if (!requiredAny.some(n => bigNames.has(n))) {
+    throw new Error('This does not look like the base C&C Generals install folder (Terrain.big / Textures.big / W3D.big not found).');
+  }
+
+  const estimate = storage.estimate ? await storage.estimate() : null;
+  const total = list.reduce((n, f) => n + f.size, 0);
+  if (estimate && Number.isFinite(estimate.quota) && Number.isFinite(estimate.usage)) {
+    const free = estimate.quota - estimate.usage;
+    if (free < total) throw new Error('Not enough browser storage for base Generals. Need ' + gxHuman(total) + ', available about ' + gxHuman(Math.max(0, free)) + '.');
+  }
+
+  if (storage.requestPersist) await storage.requestPersist();
+  let doneBytes = 0;
+  gxUI.download(0, total);
+  for (let i = 0; i < list.length; i++) {
+    const file = list[i];
+    const relPath = gxLocalRelativePath(file);
+    if (!relPath || relPath.startsWith('../')) continue;
+    const path = 'GameDataGenerals/' + relPath;
+    await storage.writeBlob(path, file);
+    doneBytes += file.size;
+    gxUI.download(doneBytes, total, 'Importing base Generals ' + (i + 1) + ' / ' + list.length + ': ' + relPath);
+    gxUI.unpack(i + 1, list.length);
+    if ((i & 7) === 7) await new Promise(r => setTimeout(r, 0));
+  }
+  await storage.writeMeta('installed-base-generals', { complete: true, files: list.length, ts: Date.now(), source: 'local-folder' });
+  return { files: list.length, bytes: doneBytes };
+}
+
 async function gxImportLocalFolder(storage, files) {
   const list = Array.from(files || []).filter(f => f && f.size >= 0);
   if (!list.length) throw new Error('No files selected.');
@@ -366,6 +402,27 @@ async function gxBoot() {
       });
     }
 
+    const baseImportBtn = document.getElementById('gx-base-import');
+    const baseFolder = document.getElementById('gx-base-folder');
+    if (baseImportBtn && baseFolder) {
+      baseImportBtn.addEventListener('click', () => baseFolder.click());
+      baseFolder.addEventListener('change', async () => {
+        baseImportBtn.disabled = true;
+        btn.disabled = true;
+        document.getElementById('gx-progress-wrap').style.display = 'block';
+        try {
+          const imported = await gxImportBaseGeneralsFolder(storage, baseFolder.files);
+          gxUI.detail.textContent = 'Base Generals files ready: ' + imported.files + ' files (' + gxHuman(imported.bytes) + ').';
+          btn.disabled = false;
+          baseImportBtn.textContent = '✓ Base Generals folder imported';
+        } catch (e) {
+          gxUI.error(e && e.message ? e.message : String(e));
+          btn.disabled = false;
+          baseImportBtn.disabled = false;
+        }
+      });
+    }
+
     const settingsBtn = document.getElementById('gx-settings-btn');
     const settingsBox = document.getElementById('gx-settings');
     const fpsSel = document.getElementById('gx-fps');
@@ -417,9 +474,13 @@ async function gxBoot() {
       }
     });
 
-    await new Promise((resolve) => btn.addEventListener('click', resolve, { once: true }));
+    await new Promise((resolve) => btn.addEventListener('click', async () => {
+      if (window.gxEnterMobileGameMode) await window.gxEnterMobileGameMode();
+      resolve();
+    }, { once: true }));
     btn.style.display = 'none';
     if (localImportBtn) localImportBtn.style.display = 'none';
+    if (baseImportBtn) baseImportBtn.style.display = 'none';
     const localNote = document.getElementById('gx-local-note');
     if (localNote) localNote.style.display = 'none';
     settingsBtn.style.display = 'none';
