@@ -4,9 +4,11 @@
   if (!coarse) return;
 
   function mouse(type, x, y, button) {
-    const cv = document.getElementById('canvas');
-    if (!cv) return;
-    cv.dispatchEvent(new MouseEvent(type, {bubbles:true,cancelable:true,clientX:x,clientY:y,button,buttons:type==='mouseup'?0:(1<<button),view:window}));
+    const cv = document.getElementById('canvas'); if (!cv) return;
+    const r=cv.getBoundingClientRect();
+    const sx=cv.width/r.width, sy=cv.height/r.height;
+    const cx=r.left+(x-r.left), cy=r.top+(y-r.top);
+    cv.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,clientX:cx,clientY:cy,screenX:(x-r.left)*sx,screenY:(y-r.top)*sy,button,buttons:type==='mouseup'?0:(1<<button),view:window}));
   }
   function key(key, code) {
     const cv=document.getElementById('canvas');
@@ -16,6 +18,7 @@
     setTimeout(()=>cv.dispatchEvent(new KeyboardEvent('keyup',o)),30);
   }
   async function immersive() {
+    document.documentElement.classList.add('gx-immersive');
     try { if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); } catch {}
     try { if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({navigationUI:'hide'}); } catch {}
     setTimeout(()=>window.scrollTo(0,1),50);
@@ -33,7 +36,13 @@
   addEventListener('touchmove',e=>{
     if(!start || e.touches.length!==1)return;
     const t=e.touches[0], dx=t.clientX-start.x, dy=t.clientY-start.y;
-    if(Math.hypot(dx,dy)>8){moved=true;clearTimeout(longTimer);mouse('mousemove',t.clientX,t.clientY,0);}
+    if(Math.hypot(dx,dy)>8){
+      if(!moved){ moved=true; clearTimeout(longTimer); mouse('mousedown',start.x,start.y,0); }
+      mouse('mousemove',t.clientX,t.clientY,0);
+      // RTS camera pan: dragging the map also nudges arrow keys in drag direction.
+      if(Math.abs(dx)>28) key(dx>0?'ArrowRight':'ArrowLeft');
+      if(Math.abs(dy)>28) key(dy>0?'ArrowDown':'ArrowUp');
+    }
     e.preventDefault();
   },{passive:false});
   addEventListener('touchend',e=>{
@@ -59,6 +68,9 @@
     const box=document.getElementById('gx-mobile-controls'); if(!box)return;
     box.hidden=false;
     box.querySelectorAll('[data-key]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();key(b.dataset.key,b.dataset.code);}));
+    box.querySelector('[data-fullscreen]').addEventListener('pointerdown',async e=>{e.preventDefault();await immersive();});
+    const close=box.querySelector('[data-close]');
+    if(close) close.addEventListener('pointerdown',e=>{e.preventDefault();key('Escape');});
     box.querySelector('[data-right]').addEventListener('pointerdown',e=>{e.preventDefault();const r=document.getElementById('canvas').getBoundingClientRect();mouse('mousedown',r.width/2,r.height/2,2);mouse('mouseup',r.width/2,r.height/2,2);});
   });
 })();
