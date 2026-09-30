@@ -277,6 +277,40 @@ function gxLocalRelativePath(file) {
   return parts.join('/');
 }
 
+async function gxImportCombinedFolder(storage, files) {
+  const list = Array.from(files || []).filter(f => f && f.size >= 0);
+  if (!list.length) throw new Error('No files selected.');
+  const items = list.map(file => ({ file, rel: gxLocalRelativePath(file).replace(/\\/g, '/') }));
+  const rootFor = re => {
+    const hit = items.find(x => re.test(x.rel));
+    if (!hit) return null;
+    const parts = hit.rel.split('/'); parts.pop();
+    return parts.length ? parts.join('/') + '/' : '';
+  };
+  const zhRoot = rootFor(/(^|\/)INIZH\.big$/i);
+  const baseRoot = rootFor(/(^|\/)Terrain\.big$/i) || rootFor(/(^|\/)Textures\.big$/i) || rootFor(/(^|\/)W3D\.big$/i);
+  if (zhRoot === null || baseRoot === null || zhRoot === baseRoot)
+    throw new Error('Select one parent folder containing BOTH separate Generals and Zero Hour folders.');
+
+  const selected = items.filter(x => x.rel.startsWith(zhRoot) || x.rel.startsWith(baseRoot));
+  const total = selected.reduce((n,x)=>n+x.file.size,0);
+  if (storage.requestPersist) await storage.requestPersist();
+  gxUI.download(0,total); let done=0, zhCount=0, baseCount=0;
+  for (let i=0;i<selected.length;i++) {
+    const x=selected[i]; let path;
+    if (x.rel.startsWith(zhRoot)) { path=x.rel.slice(zhRoot.length); zhCount++; }
+    else { path='GameDataGenerals/'+x.rel.slice(baseRoot.length); baseCount++; }
+    if (!path || path.includes('../')) continue;
+    await storage.writeBlob(path,x.file); done+=x.file.size;
+    gxUI.download(done,total,'Importing all game files '+(i+1)+' / '+selected.length+': '+path);
+    gxUI.unpack(i+1,selected.length);
+    if ((i&7)===7) await new Promise(r=>setTimeout(r,0));
+  }
+  await storage.writeMeta('installed-default_ru',{complete:true,files:zhCount,ts:Date.now(),source:'combined-local-folder'});
+  await storage.writeMeta('installed-base-generals',{complete:true,files:baseCount,ts:Date.now(),source:'combined-local-folder'});
+  return {files:selected.length,bytes:done,zhCount,baseCount};
+}
+
 async function gxAssetPreflight(storage) {
   const paths = storage.listPaths ? await storage.listPaths() : [];
   const lower = paths.map(p => String(p).replace(/\\/g, '/').toLowerCase());
@@ -389,6 +423,21 @@ async function gxBoot() {
 
     const btn = document.getElementById('gx-play');
     btn.style.display = 'inline-block';
+
+    const combinedBtn = document.getElementById('gx-combined-import');
+    const combinedFolder = document.getElementById('gx-combined-folder');
+    if (combinedBtn && combinedFolder) {
+      combinedBtn.addEventListener('click', () => combinedFolder.click());
+      combinedFolder.addEventListener('change', async () => {
+        combinedBtn.disabled=true; btn.disabled=true;
+        document.getElementById('gx-progress-wrap').style.display='block';
+        try {
+          const r=await gxImportCombinedFolder(storage,combinedFolder.files);
+          gxUI.detail.textContent='All files ready: Zero Hour '+r.zhCount+' + Generals '+r.baseCount+' files ('+gxHuman(r.bytes)+').';
+          combinedBtn.textContent='✓ Generals + Zero Hour imported'; btn.disabled=false;
+        } catch(e) { gxUI.error(e&&e.message?e.message:String(e)); combinedBtn.disabled=false; btn.disabled=false; }
+      });
+    }
 
     const localImportBtn = document.getElementById('gx-local-import');
     const localFolder = document.getElementById('gx-local-folder');
