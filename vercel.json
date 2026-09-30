@@ -1,12 +1,15 @@
 {
   "rewrites": [
+    { "source": "/", "destination": "/web/dist/index.html" },
+    { "source": "/:path*", "destination": "/web/dist/:path*" }
+  ],
+  "headers": [
     {
-      "source": "/",
-      "destination": "/web/shell/index.html"
-    },
-    {
-      "source": "/:path*",
-      "destination": "/web/shell/:path*"
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
+      ]
     }
   ]
 }
