@@ -36,14 +36,16 @@ async function gxDetectStorage() {
   // browsers expose navigator.storage but fail on getDirectory).
   if (window.isSecureContext && navigator.storage && navigator.storage.getDirectory) {
     try {
-      const root = await navigator.storage.getDirectory();
-      // Probe write access.
-      const probe = await root.getFileHandle('.gx-probe', { create: true });
-      await root.removeEntry('.gx-probe');
-      void probe;
+      // On iOS Safari a root write/delete probe can stall for a very long time
+      // when the origin already owns many GB of OPFS data. Opening the root is
+      // enough here; real writes still report their own errors later.
+      const root = await Promise.race([
+        navigator.storage.getDirectory(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('OPFS open timeout')), 8000)),
+      ]);
       return new OpfsStorage(root);
     } catch (e) {
-      console.warn('[storage] OPFS probe failed, falling back to IndexedDB:', e);
+      console.warn('[storage] OPFS open failed/timed out, falling back to IndexedDB:', e);
     }
   }
   if (window.indexedDB) {
