@@ -983,8 +983,14 @@ static bool prepareLevelUpload(D3DFORMAT fmt, unsigned w, unsigned h,
 	case D3DFMT_DXT3:
 	case D3DFMT_DXT4:
 	case D3DFMT_DXT5: {
-		if (!hasS3TC) {
-			WARN_ONCE(s_noS3tc, "S3TC missing; decoding DXT textures on CPU");
+		// iPhone Safari has shipped combinations where the S3TC extension is
+		// advertised but compressed uploads still fail or render magenta. Prefer
+		// the deterministic CPU decoder on iOS and upload ordinary RGBA8.
+		const bool forceCpuDXT = EM_ASM_INT({
+			return /iPhone|iPad|iPod/.test(navigator.userAgent) ? 1 : 0;
+		}) != 0;
+		if (!hasS3TC || forceCpuDXT) {
+			WARN_ONCE(s_noS3tc, "Using CPU DXT decode for Safari/iOS compatibility");
 			if (!decodeDXTToRGBA(fmt, w, h, src, srcSize, &out->converted)) return false;
 			out->pixels = out->converted.data();
 			out->internalFormat = GL_RGBA;
@@ -1062,7 +1068,7 @@ void WebGLPipeline::uploadTexture(WebGLTexture *tex)
 			}
 		}
 	}
-	if (!isDXT && levels > 1) {
+	if ((!isDXT || EM_ASM_INT({ return /iPhone|iPad|iPod/.test(navigator.userAgent) ? 1 : 0; })) && levels > 1) {
 		glGenerateMipmap(GL_TEXTURE_2D);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 1000);
 	} else {
