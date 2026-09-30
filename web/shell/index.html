@@ -11,8 +11,7 @@
   #gx-m-right{right:18px;bottom:28px} #gx-m-save{left:18px;bottom:28px;width:64px!important;height:42px!important;border-radius:9px!important;font-size:11px!important} #gx-m-load{left:90px;bottom:28px;width:64px!important;height:42px!important;border-radius:9px!important;font-size:11px!important} #gx-m-close{left:76px;top:18px;width:46px!important;height:38px!important;border-radius:9px!important;font-size:18px!important} #gx-m-full{right:18px;top:18px;width:46px!important;height:38px!important;border-radius:9px!important;font-size:18px!important} #gx-m-stop{right:82px;bottom:28px} #gx-m-attack{right:18px;bottom:92px} #gx-m-esc{left:18px;top:18px;width:46px!important;height:38px!important;border-radius:9px!important;font-size:12px!important}
   @media (pointer:fine){#gx-mobile-controls{display:none!important}}
   html.gx-immersive,html.gx-immersive body{width:100%;height:100%;margin:0;overflow:hidden;background:#000;position:fixed;inset:0} html.gx-iphone,html.gx-iphone body{width:var(--gx-vw,100dvw);height:var(--gx-vh,100dvh)}
-  html.gx-immersive #canvas{position:fixed;inset:0;width:var(--gx-vw,100dvw)!important;height:var(--gx-vh,100dvh)!important;object-fit:fill;touch-action:none}
-  @media (orientation:landscape){html.gx-immersive #canvas{width:100dvw!important;height:100dvh!important}}
+  html.gx-immersive #canvas{position:fixed;left:env(safe-area-inset-left);top:env(safe-area-inset-top);width:calc(var(--gx-vw,100dvw) - env(safe-area-inset-left) - env(safe-area-inset-right))!important;height:calc(var(--gx-vh,100dvh) - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;object-fit:fill;touch-action:none}
 
   html, body {
     margin: 0; padding: 0; width: 100%; height: 100%;
@@ -276,8 +275,8 @@
 <script src="loadscreen.js"></script>
 <script src="lobby.js"></script>
 <script src="mp-ui.js"></script>
-<script src="mobile-controls.js?v=23"></script>
-<script src="game.js?v=19"></script>
+<script src="mobile-controls.js?v=24"></script>
+<script src="game.js?v=20"></script>
 <script src="loader.js?v=19"></script>
 </body>
 </html>
