@@ -293,7 +293,7 @@ async function gxImportCombinedZip(storage, zipFile) {
     if(!name.endsWith('/')) entries.push({name,method,csize,usize,start}); p=start+csize;
   }
   const rootFor=re=>{const e=entries.find(x=>re.test(x.name)); if(!e)return null; return e.name.slice(0,e.name.lastIndexOf('/')+1);};
-  const zhRoot=rootFor(/(^|\\/)INIZH\\.big$/i), baseRoot=rootFor(/(^|\\/)(Terrain|Textures|W3D)\\.big$/i);
+  const zhRoot=rootFor(/(^|\/)INIZH\.big$/i), baseRoot=rootFor(/(^|\/)(Terrain|Textures|W3D)\.big$/i);
   if(zhRoot===null||baseRoot===null||zhRoot===baseRoot) throw new Error('ZIP must contain separate Generals and Zero Hour folders.');
   const chosen=entries.filter(x=>x.name.startsWith(zhRoot)||x.name.startsWith(baseRoot)); let done=0,zhCount=0,baseCount=0; const total=chosen.reduce((n,x)=>n+x.usize,0); gxUI.download(0,total); if(storage.requestPersist) await storage.requestPersist();
   for(let i=0;i<chosen.length;i++){const e=chosen[i]; let path=e.name.startsWith(zhRoot)?e.name.slice(zhRoot.length):'GameDataGenerals/'+e.name.slice(baseRoot.length); if(!path||path.includes('../'))continue; let blob=new Blob([u8.slice(e.start,e.start+e.csize)]); if(e.method===8){blob=await new Response(blob.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();} else if(e.method!==0) throw new Error('Unsupported ZIP compression method '+e.method+' for '+e.name); await storage.writeBlob(path,blob); done+=blob.size; e.name.startsWith(zhRoot)?zhCount++:baseCount++; gxUI.download(done,total,'Unpacking ZIP '+(i+1)+' / '+chosen.length+': '+path); gxUI.unpack(i+1,chosen.length); if((i&3)===3)await new Promise(r=>setTimeout(r,0));}
