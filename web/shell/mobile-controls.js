@@ -16,6 +16,7 @@
     setTimeout(()=>cv.dispatchEvent(new KeyboardEvent('keyup',o)),30);
   }
   async function immersive() {
+    document.documentElement.classList.add('gx-immersive');
     try { if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); } catch {}
     try { if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({navigationUI:'hide'}); } catch {}
     setTimeout(()=>window.scrollTo(0,1),50);
@@ -59,6 +60,7 @@
     const box=document.getElementById('gx-mobile-controls'); if(!box)return;
     box.hidden=false;
     box.querySelectorAll('[data-key]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();key(b.dataset.key,b.dataset.code);}));
+    box.querySelector('[data-fullscreen]').addEventListener('pointerdown',async e=>{e.preventDefault();await immersive();});
     box.querySelector('[data-right]').addEventListener('pointerdown',e=>{e.preventDefault();const r=document.getElementById('canvas').getBoundingClientRect();mouse('mousedown',r.width/2,r.height/2,2);mouse('mouseup',r.width/2,r.height/2,2);});
   });
 })();
