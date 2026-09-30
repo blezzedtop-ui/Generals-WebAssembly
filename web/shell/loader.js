@@ -266,6 +266,61 @@ async function gxLoadNetConfig() {
   }
 }
 
+// ── Local owned-game import ──────────────────────────────────────────────────
+// iOS Safari 18.4+ supports directory selection via webkitdirectory. Importing
+// writes the user's own installation directly to OPFS/IndexedDB; nothing is
+// uploaded to this origin or committed to the repository.
+function gxLocalRelativePath(file) {
+  const raw = (file.webkitRelativePath || file.name || '').replace(/\\/g, '/');
+  const parts = raw.split('/').filter(Boolean);
+  if (parts.length > 1) parts.shift(); // strip the selected root directory
+  return parts.join('/');
+}
+
+async function gxImportLocalFolder(storage, files) {
+  const list = Array.from(files || []).filter(f => f && f.size >= 0);
+  if (!list.length) throw new Error('No files selected.');
+
+  const rel = list.map(gxLocalRelativePath);
+  const hasBig = rel.some(p => /(^|\/)[^/]+\.big$/i.test(p));
+  const hasIni = rel.some(p => /(^|\/)INIZH\.big$/i.test(p));
+  if (!hasBig || !hasIni) {
+    throw new Error('This does not look like a Zero Hour install folder (INIZH.big was not found).');
+  }
+
+  const estimate = storage.estimate ? await storage.estimate() : null;
+  const total = list.reduce((n, f) => n + f.size, 0);
+  if (estimate && Number.isFinite(estimate.quota) && Number.isFinite(estimate.usage)) {
+    const free = estimate.quota - estimate.usage;
+    if (free < total) {
+      throw new Error('Not enough browser storage. Need ' + gxHuman(total) +
+        ', available about ' + gxHuman(Math.max(0, free)) + '.');
+    }
+  }
+
+  if (storage.requestPersist) await storage.requestPersist();
+  let doneBytes = 0;
+  gxUI.status('loader.files');
+  gxUI.download(0, total);
+
+  for (let i = 0; i < list.length; i++) {
+    const file = list[i];
+    const path = gxLocalRelativePath(file);
+    if (!path || path.startsWith('../')) continue;
+    await storage.writeBlob(path, file);
+    doneBytes += file.size;
+    gxUI.download(doneBytes, total, 'Importing ' + (i + 1) + ' / ' + list.length + ': ' + path);
+    gxUI.unpack(i + 1, list.length);
+    // Yield periodically so iOS does not consider the page unresponsive.
+    if ((i & 7) === 7) await new Promise(r => setTimeout(r, 0));
+  }
+
+  await storage.writeMeta('installed-default_ru', {
+    complete: true, files: list.length, ts: Date.now(), source: 'local-folder'
+  });
+  return { files: list.length, bytes: doneBytes };
+}
+
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
 async function gxBoot() {
@@ -287,6 +342,29 @@ async function gxBoot() {
 
     const btn = document.getElementById('gx-play');
     btn.style.display = 'inline-block';
+
+    const localImportBtn = document.getElementById('gx-local-import');
+    const localFolder = document.getElementById('gx-local-folder');
+    if (localImportBtn && localFolder) {
+      localImportBtn.addEventListener('click', () => localFolder.click());
+      localFolder.addEventListener('change', async () => {
+        localImportBtn.disabled = true;
+        btn.disabled = true;
+        document.getElementById('gx-progress-wrap').style.display = 'block';
+        try {
+          const imported = await gxImportLocalFolder(storage, localFolder.files);
+          gxUI.status('loader.ready');
+          gxUI.detail.textContent = 'Local Zero Hour files ready: ' + imported.files +
+            ' files (' + gxHuman(imported.bytes) + '). Tap Play.';
+          btn.disabled = false;
+          localImportBtn.textContent = '✓ Zero Hour folder imported';
+        } catch (e) {
+          gxUI.error(e && e.message ? e.message : String(e));
+          btn.disabled = false;
+          localImportBtn.disabled = false;
+        }
+      });
+    }
 
     const settingsBtn = document.getElementById('gx-settings-btn');
     const settingsBox = document.getElementById('gx-settings');
@@ -341,6 +419,9 @@ async function gxBoot() {
 
     await new Promise((resolve) => btn.addEventListener('click', resolve, { once: true }));
     btn.style.display = 'none';
+    if (localImportBtn) localImportBtn.style.display = 'none';
+    const localNote = document.getElementById('gx-local-note');
+    if (localNote) localNote.style.display = 'none';
     settingsBtn.style.display = 'none';
     settingsBox.hidden = true;
 
