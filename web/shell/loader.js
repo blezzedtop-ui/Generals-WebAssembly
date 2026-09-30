@@ -474,7 +474,10 @@ async function gxBoot() {
       }
     });
 
-    await new Promise((resolve) => btn.addEventListener('click', resolve, { once: true }));
+    await new Promise((resolve) => btn.addEventListener('click', async () => {
+      if (window.gxEnterMobileGameMode) await window.gxEnterMobileGameMode();
+      resolve();
+    }, { once: true }));
     btn.style.display = 'none';
     if (localImportBtn) localImportBtn.style.display = 'none';
     if (baseImportBtn) baseImportBtn.style.display = 'none';
