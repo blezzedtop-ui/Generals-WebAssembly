@@ -253,8 +253,10 @@ async function gxWipeAllStorage() {
 }
 
 async function gxLoadNetConfig() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2500);
   try {
-    const r = await fetch('ice.json', { cache: 'no-cache' });
+    const r = await fetch('ice.json', { cache: 'no-cache', signal: controller.signal });
     if (!r.ok) return;
     const cfg = await r.json();
     if (cfg && Array.isArray(cfg.iceServers) && cfg.iceServers.length)
@@ -263,6 +265,8 @@ async function gxLoadNetConfig() {
       window.gxNetConfig.mqttBrokers = cfg.mqttBrokers;
   } catch (e) {
     console.warn('[loader] ice.json не прочитан:', e);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -431,10 +435,15 @@ async function gxBoot() {
   gxUI.init();
 
   try {
+    gxUI.detail.textContent = '1/4 Browser tekshirilmoqda…';
     await gxCheckEnvironment();
-    await gxLoadNetConfig();
 
+    // Multiplayer config must never block the launcher. Load it in parallel.
+    void gxLoadNetConfig();
+
+    gxUI.detail.textContent = '2/4 Xotira ochilmoqda…';
     const storage = await gxDetectStorage();
+    gxUI.detail.textContent = '3/4 Launcher tayyorlanmoqda…';
     console.log('[loader] хранилище:', storage.kind);
     window.gxStorageKind = storage.kind;
     document.getElementById('gx-storage-kind').textContent =
