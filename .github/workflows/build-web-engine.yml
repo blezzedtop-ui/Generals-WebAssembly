@@ -1,0 +1,60 @@
+name: Build Web Engine
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'GeneralsMD/**'
+      - 'Core/**'
+      - 'Dependencies/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - 'web/shell/**'
+      - 'scripts/web/**'
+      - '.github/workflows/build-web-engine.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: '4.0.15'
+          actions-cache-folder: emsdk-cache
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
+      - name: Configure
+        run: |
+          export EMSCRIPTEN_ROOT="$(dirname "$(which emcc)")"
+          cmake --preset emscripten
+      - name: Build engine
+        run: cmake --build build/emscripten --target z_generals -j2
+      - name: Assemble public bundle without game assets
+        run: |
+          rm -rf web/dist
+          mkdir -p web/dist/i18n
+          cp web/shell/*.js web/shell/index.html web/dist/
+          cp -R web/shell/i18n/. web/dist/i18n/
+          cp web/shell/brotli_bg.wasm web/dist/
+          cp web/shell/ice.json web/dist/
+          WASM_DIR=build/emscripten/GeneralsMD
+          test -f "$WASM_DIR/GeneralsXZH.wasm"
+          test -f "$WASM_DIR/GeneralsXZH.js"
+          cp "$WASM_DIR/GeneralsXZH.wasm" "$WASM_DIR/GeneralsXZH.js" web/dist/
+          BUILD_ID="$(sha256sum web/dist/GeneralsXZH.wasm | cut -c1-12)"
+          printf '{"buildId":"%s"}\n' "$BUILD_ID" > web/dist/build.json
+      - name: Publish generated web bundle
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -f web/dist
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Build web engine bundle [skip ci]"
+          git push
