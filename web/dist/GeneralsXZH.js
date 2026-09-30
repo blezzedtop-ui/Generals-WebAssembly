@@ -11627,7 +11627,8 @@ var ASM_CONSTS = {
   1249365: ($0, $1) => {
     alert(UTF8ToString($0) + "\n\n" + UTF8ToString($1));
   },
-  1249422: () => {
+  1249422: () => /iPhone|iPad|iPod/.test(navigator.userAgent) ? 1 : 0,
+  1249487: () => {
     try {
       const c = document.createElement("canvas");
       c.width = 1;
@@ -11641,7 +11642,8 @@ var ASM_CONSTS = {
     } catch (e) {
       return 0;
     }
-  }
+  },
+  1249749: () => /iPhone|iPad|iPod/.test(navigator.userAgent) ? 1 : 0
 };
 
 function SDL_GetEmscriptenJoystickVendor(device_index) {
