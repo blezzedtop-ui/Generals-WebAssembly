@@ -511,6 +511,8 @@ async function gxBoot() {
 
     const quickGame=document.getElementById('gx-game-select');
     if(quickGame){quickGame.value=localStorage.getItem('gx-game')||'default_ru';quickGame.addEventListener('change',()=>localStorage.setItem('gx-game',quickGame.value));}
+    const quickFps=document.getElementById('gx-fps-quick');
+    if(quickFps){quickFps.value=localStorage.getItem('gx-fps')||'30';quickFps.addEventListener('change',()=>{localStorage.setItem('gx-fps',quickFps.value);const full=document.getElementById('gx-fps');if(full)full.value=quickFps.value;});}
     const quickWipe=document.getElementById('gx-wipe-quick');
     if(quickWipe){let armed=false;quickWipe.addEventListener('click',async()=>{if(!armed){armed=true;quickWipe.textContent='⚠️ Yana bosing: hammasini o‘chirish';setTimeout(()=>{armed=false;quickWipe.textContent='🗑 Очистить все данные';},4000);return;}quickWipe.disabled=true;quickWipe.textContent='Tozalanmoqda…';try{await gxWipeAllStorage();location.reload();}catch(e){gxUI.error(e&&e.message?e.message:String(e));quickWipe.disabled=false;}});}
 
@@ -519,7 +521,7 @@ async function gxBoot() {
     const fpsSel = document.getElementById('gx-fps');
     fpsSel.value = localStorage.getItem('gx-fps') || '30';
     if (![...fpsSel.options].some(o => o.value === fpsSel.value)) fpsSel.value = '30';
-    fpsSel.addEventListener('change', () => localStorage.setItem('gx-fps', fpsSel.value));
+    fpsSel.addEventListener('change', () => { localStorage.setItem('gx-fps', fpsSel.value); if(quickFps) quickFps.value=fpsSel.value; });
 
     const buildSel = document.getElementById('gx-build');
     buildSel.value = localStorage.getItem('gx-build') || 'default_ru';
