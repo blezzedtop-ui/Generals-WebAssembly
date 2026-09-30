@@ -59,6 +59,7 @@
 #include "ddsfile.h"
 #include "bitmaphandler.h"
 #include "wwprofile.h"
+#include <cstdio>
 
 bool TextureLoader::TextureLoadSuspended;
 int TextureLoader::TextureInactiveOverrideTime = 0;
