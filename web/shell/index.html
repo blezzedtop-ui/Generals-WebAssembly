@@ -80,7 +80,7 @@
   }
   #gx-zip-import:hover, #gx-combined-import:hover, #gx-local-import:hover, #gx-base-import:hover { background: #253242; }
   #gx-local-note { margin-top: 7px; max-width: 520px; font-size: 11px; opacity: .55; line-height: 1.4; }
-  #gx-settings-btn {
+  #gx-quick-settings{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:12px} #gx-quick-settings select,#gx-wipe-quick{padding:8px 12px;border-radius:6px;color:#d8dee6;background:#1d2733;border:1px solid #2c3a4a} #gx-wipe-quick{border-color:#7c3a3a;color:#f0b0b0} #gx-settings-btn {
     display: none; margin-top: 12px; padding: 8px 22px;
     font-size: 13px; letter-spacing: 1px; cursor: pointer;
     color: #d8dee6; background: #1d2733; border: 1px solid #2c3a4a;
@@ -231,7 +231,11 @@
   <input id="gx-base-folder" type="file" webkitdirectory directory multiple hidden>
   <div id="gx-base-note" style="margin-top:7px;max-width:520px;font-size:11px;opacity:.55;line-height:1.4">Required for terrain, roads, models and textures used by Zero Hour. Select the original C&amp;C Generals install folder.</div>
   </details>
-  <button id="gx-settings-btn" type="button" data-i18n="shell.settings">Настройки</button>
+  <div id="gx-quick-settings">
+  <label>🎮 Game: <select id="gx-game-select"><option value="default_ru">Zero Hour</option><option value="generals">Generals</option></select></label>
+  <button id="gx-wipe-quick" type="button">🗑 Очистить все данные</button>
+</div>
+<button id="gx-settings-btn" type="button" data-i18n="shell.settings">Настройки</button>
   <div id="gx-settings" hidden>
     <label><span data-i18n="shell.fpsLimit">Лимит FPS:</span>
       <select id="gx-fps">
