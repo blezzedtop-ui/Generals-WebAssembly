@@ -783,6 +783,122 @@ struct UploadDesc {
 	std::vector<uint8_t> converted;
 };
 
+// CPU fallback for browsers (notably iPhone/iPad Safari) that expose WebGL2
+// without WEBGL_compressed_texture_s3tc. D3D8-era Generals assets are heavily
+// DXT-compressed; replacing unsupported blocks with magenta made valid textures
+// look missing. Decode DXT1/2/3/4/5 into RGBA8 instead.
+static inline void dxt565ToRGBA(uint16_t c, uint8_t out[4])
+{
+	out[0] = (uint8_t)((((c >> 11) & 31) * 255 + 15) / 31);
+	out[1] = (uint8_t)((((c >> 5) & 63) * 255 + 31) / 63);
+	out[2] = (uint8_t)(((c & 31) * 255 + 15) / 31);
+	out[3] = 255;
+}
+
+static void dxtColorPalette(const uint8_t *block, bool dxt1Mode, uint8_t pal[4][4])
+{
+	const uint16_t c0 = (uint16_t)(block[0] | (block[1] << 8));
+	const uint16_t c1 = (uint16_t)(block[2] | (block[3] << 8));
+	dxt565ToRGBA(c0, pal[0]);
+	dxt565ToRGBA(c1, pal[1]);
+
+	if (dxt1Mode && c0 <= c1) {
+		for (int k = 0; k < 3; ++k) pal[2][k] = (uint8_t)((pal[0][k] + pal[1][k]) / 2);
+		pal[2][3] = 255;
+		pal[3][0] = pal[3][1] = pal[3][2] = 0;
+		pal[3][3] = 0;
+	} else {
+		for (int k = 0; k < 3; ++k) {
+			pal[2][k] = (uint8_t)((2 * pal[0][k] + pal[1][k]) / 3);
+			pal[3][k] = (uint8_t)((pal[0][k] + 2 * pal[1][k]) / 3);
+		}
+		pal[2][3] = pal[3][3] = 255;
+	}
+}
+
+static bool decodeDXTToRGBA(D3DFORMAT fmt, unsigned w, unsigned h,
+                            const uint8_t *src, size_t srcSize,
+                            std::vector<uint8_t> *dst)
+{
+	const bool is1 = fmt == D3DFMT_DXT1;
+	const bool is3 = fmt == D3DFMT_DXT2 || fmt == D3DFMT_DXT3;
+	const bool is5 = fmt == D3DFMT_DXT4 || fmt == D3DFMT_DXT5;
+	if (!is1 && !is3 && !is5) return false;
+
+	const unsigned blocksX = (w + 3) / 4;
+	const unsigned blocksY = (h + 3) / 4;
+	const size_t blockBytes = is1 ? 8u : 16u;
+	const size_t needed = (size_t)blocksX * blocksY * blockBytes;
+	if (srcSize < needed) {
+		fprintf(stderr, "[d3d8webgl] DXT CPU decode short buffer: got=%zu need=%zu %ux%u fmt=0x%x\n",
+		        srcSize, needed, w, h, (unsigned)fmt);
+		return false;
+	}
+
+	dst->assign((size_t)w * h * 4, 0);
+	for (unsigned by = 0; by < blocksY; ++by) {
+		for (unsigned bx = 0; bx < blocksX; ++bx) {
+			const uint8_t *b = src + ((size_t)by * blocksX + bx) * blockBytes;
+			uint8_t alpha[16];
+			for (int i = 0; i < 16; ++i) alpha[i] = 255;
+
+			const uint8_t *color = b;
+			if (is3) {
+				uint64_t bits = 0;
+				for (int i = 0; i < 8; ++i) bits |= (uint64_t)b[i] << (8 * i);
+				for (int i = 0; i < 16; ++i) alpha[i] = (uint8_t)(((bits >> (4 * i)) & 0xF) * 17);
+				color = b + 8;
+			} else if (is5) {
+				const uint8_t a0 = b[0], a1 = b[1];
+				uint8_t ap[8];
+				ap[0] = a0; ap[1] = a1;
+				if (a0 > a1) {
+					for (int i = 1; i <= 6; ++i)
+						ap[i + 1] = (uint8_t)(((7 - i) * a0 + i * a1) / 7);
+				} else {
+					for (int i = 1; i <= 4; ++i)
+						ap[i + 1] = (uint8_t)(((5 - i) * a0 + i * a1) / 5);
+					ap[6] = 0; ap[7] = 255;
+				}
+				uint64_t abits = 0;
+				for (int i = 0; i < 6; ++i) abits |= (uint64_t)b[2 + i] << (8 * i);
+				for (int i = 0; i < 16; ++i) alpha[i] = ap[(abits >> (3 * i)) & 7];
+				color = b + 8;
+			}
+
+			uint8_t pal[4][4];
+			dxtColorPalette(color, is1, pal);
+			const uint32_t indices = (uint32_t)color[4] |
+			                         ((uint32_t)color[5] << 8) |
+			                         ((uint32_t)color[6] << 16) |
+			                         ((uint32_t)color[7] << 24);
+
+			for (unsigned py = 0; py < 4; ++py) {
+				for (unsigned px = 0; px < 4; ++px) {
+					const unsigned x = bx * 4 + px, y = by * 4 + py;
+					if (x >= w || y >= h) continue;
+					const unsigned pi = py * 4 + px;
+					const unsigned ci = (indices >> (2 * pi)) & 3;
+					uint8_t *d = dst->data() + ((size_t)y * w + x) * 4;
+					d[0] = pal[ci][0];
+					d[1] = pal[ci][1];
+					d[2] = pal[ci][2];
+					d[3] = is1 ? pal[ci][3] : alpha[pi];
+
+					// DXT2/DXT4 store premultiplied RGB. Convert back to the
+					// straight-alpha convention expected by the WebGL pipeline.
+					if ((fmt == D3DFMT_DXT2 || fmt == D3DFMT_DXT4) && d[3] > 0 && d[3] < 255) {
+						d[0] = (uint8_t)std::min(255u, ((unsigned)d[0] * 255u + d[3] / 2u) / d[3]);
+						d[1] = (uint8_t)std::min(255u, ((unsigned)d[1] * 255u + d[3] / 2u) / d[3]);
+						d[2] = (uint8_t)std::min(255u, ((unsigned)d[2] * 255u + d[3] / 2u) / d[3]);
+					}
+				}
+			}
+		}
+	}
+	return true;
+}
+
 static bool prepareLevelUpload(D3DFORMAT fmt, unsigned w, unsigned h,
                                const uint8_t *src, size_t srcSize, bool hasS3TC, UploadDesc *out)
 {
@@ -867,8 +983,13 @@ static bool prepareLevelUpload(D3DFORMAT fmt, unsigned w, unsigned h,
 	case D3DFMT_DXT4:
 	case D3DFMT_DXT5: {
 		if (!hasS3TC) {
-			WARN_ONCE(s_noS3tc, "DXT texture but WEBGL_compressed_texture_s3tc missing");
-			return false;
+			WARN_ONCE(s_noS3tc, "S3TC missing; decoding DXT textures on CPU");
+			if (!decodeDXTToRGBA(fmt, w, h, src, srcSize, &out->converted)) return false;
+			out->pixels = out->converted.data();
+			out->internalFormat = GL_RGBA;
+			out->format = GL_RGBA;
+			out->type = GL_UNSIGNED_BYTE;
+			return true;
 		}
 		out->compressed = true;
 		out->compressedSize = (uint32_t)srcSize;
