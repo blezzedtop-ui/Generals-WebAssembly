@@ -331,14 +331,18 @@ async function gxImportCombinedFolder(storage, files) {
 }
 
 async function gxAssetPreflight(storage) {
-  const paths = storage.listPaths ? await storage.listPaths() : [];
-  const lower = paths.map(p => String(p).replace(/\\/g, '/').toLowerCase());
-  const has = suffix => lower.some(p => p.endsWith('/' + suffix) || p === suffix);
-  const zh = ['inizh.big', 'w3dzh.big'];
-  const base = ['terrain.big', 'textures.big', 'w3d.big'];
-  const missingZH = zh.filter(n => !has(n));
-  const missingBase = base.filter(n => !has('gamedatagenerals/' + n));
-  return { ok: !missingZH.length && !missingBase.length, missingZH, missingBase, count: paths.length };
+  // Do not recursively enumerate a multi-GB OPFS tree on iOS Safari. Checking
+  // the known root archives directly is dramatically faster and avoids the
+  // launcher appearing frozen at “Initializing…”.
+  const checks = await Promise.all([
+    storage.has('INIZH.big'), storage.has('W3DZH.big'),
+    storage.has('GameDataGenerals/Terrain.big'),
+    storage.has('GameDataGenerals/Textures.big'),
+    storage.has('GameDataGenerals/W3D.big')
+  ]);
+  const missingZH=[]; if(!checks[0]) missingZH.push('inizh.big'); if(!checks[1]) missingZH.push('w3dzh.big');
+  const missingBase=[]; if(!checks[2]) missingBase.push('terrain.big'); if(!checks[3]) missingBase.push('textures.big'); if(!checks[4]) missingBase.push('w3d.big');
+  return {ok:!missingZH.length&&!missingBase.length,missingZH,missingBase,count:'verified'};
 }
 
 async function gxImportBaseGeneralsFolder(storage, files) {
