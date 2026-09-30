@@ -65,6 +65,12 @@
     border: none; border-radius: 6px; text-transform: uppercase; font-weight: 700;
   }
   #gx-play:hover { filter: brightness(1.1); }
+  #gx-local-import {
+    margin-top: 12px; padding: 10px 18px; font-size: 13px; cursor: pointer;
+    color: #d8dee6; background: #1d2733; border: 1px solid #4fce8f; border-radius: 6px;
+  }
+  #gx-local-import:hover { background: #253242; }
+  #gx-local-note { margin-top: 7px; max-width: 520px; font-size: 11px; opacity: .55; line-height: 1.4; }
   #gx-settings-btn {
     display: none; margin-top: 12px; padding: 8px 22px;
     font-size: 13px; letter-spacing: 1px; cursor: pointer;
@@ -192,6 +198,9 @@
   </div>
   <div id="gx-detail" data-i18n="shell.initializing">Инициализация…</div>
   <button id="gx-play" data-i18n="shell.play">Играть</button>
+  <button id="gx-local-import" type="button">📁 Import my Zero Hour folder</button>
+  <input id="gx-local-folder" type="file" webkitdirectory directory multiple hidden>
+  <div id="gx-local-note">iPhone/Safari: choose your extracted Zero Hour install folder. Files stay on this device and are not uploaded to the server.</div>
   <button id="gx-settings-btn" type="button" data-i18n="shell.settings">Настройки</button>
   <div id="gx-settings" hidden>
     <label><span data-i18n="shell.fpsLimit">Лимит FPS:</span>
