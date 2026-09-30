@@ -69,6 +69,10 @@
     box.hidden=false;
     box.querySelectorAll('[data-key]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();key(b.dataset.key,b.dataset.code);}));
     box.querySelector('[data-fullscreen]').addEventListener('pointerdown',async e=>{e.preventDefault();await immersive();});
+    const save=box.querySelector('[data-save]');
+    if(save) save.addEventListener('pointerdown',e=>{e.preventDefault();key('F5','F5');});
+    const load=box.querySelector('[data-load]');
+    if(load) load.addEventListener('pointerdown',e=>{e.preventDefault();key('F10','F10');});
     const close=box.querySelector('[data-close]');
     if(close) close.addEventListener('pointerdown',e=>{e.preventDefault();key('Escape');});
     box.querySelector('[data-right]').addEventListener('pointerdown',e=>{e.preventDefault();const r=document.getElementById('canvas').getBoundingClientRect();mouse('mousedown',r.width/2,r.height/2,2);mouse('mouseup',r.width/2,r.height/2,2);});

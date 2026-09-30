@@ -8,7 +8,7 @@
   body { touch-action:none; overscroll-behavior:none; }
   #gx-mobile-controls{position:fixed;inset:0;z-index:18;pointer-events:none;user-select:none;-webkit-user-select:none}
   #gx-mobile-controls button{pointer-events:auto;position:absolute;width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(10,15,20,.52);color:#fff;font-size:19px;font-weight:700;-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px)}
-  #gx-m-right{right:18px;bottom:28px} #gx-m-close{left:76px;top:18px;width:46px!important;height:38px!important;border-radius:9px!important;font-size:18px!important} #gx-m-full{right:18px;top:18px;width:46px!important;height:38px!important;border-radius:9px!important;font-size:18px!important} #gx-m-stop{right:82px;bottom:28px} #gx-m-attack{right:18px;bottom:92px} #gx-m-esc{left:18px;top:18px;width:46px!important;height:38px!important;border-radius:9px!important;font-size:12px!important}
+  #gx-m-right{right:18px;bottom:28px} #gx-m-save{left:18px;bottom:28px;width:64px!important;height:42px!important;border-radius:9px!important;font-size:11px!important} #gx-m-load{left:90px;bottom:28px;width:64px!important;height:42px!important;border-radius:9px!important;font-size:11px!important} #gx-m-close{left:76px;top:18px;width:46px!important;height:38px!important;border-radius:9px!important;font-size:18px!important} #gx-m-full{right:18px;top:18px;width:46px!important;height:38px!important;border-radius:9px!important;font-size:18px!important} #gx-m-stop{right:82px;bottom:28px} #gx-m-attack{right:18px;bottom:92px} #gx-m-esc{left:18px;top:18px;width:46px!important;height:38px!important;border-radius:9px!important;font-size:12px!important}
   @media (pointer:fine){#gx-mobile-controls{display:none!important}}
   html.gx-immersive,html.gx-immersive body{width:100%;height:100%;margin:0;overflow:hidden;background:#000}
   html.gx-immersive #canvas{position:fixed;inset:0;width:100dvw!important;height:100dvh!important;object-fit:fill}
@@ -175,6 +175,8 @@
   <button id="gx-m-attack" data-key="a" data-code="KeyA">A</button>
   <button id="gx-m-stop" data-key="s" data-code="KeyS">S</button>
   <button id="gx-m-right" data-right="1">R</button>
+  <button id="gx-m-save" data-save="1">💾 SAVE</button>
+  <button id="gx-m-load" data-load="1">▶ LOAD</button>
 </div>
 
 <div id="gx-mp" hidden>
@@ -270,8 +272,8 @@
 <script src="loadscreen.js"></script>
 <script src="lobby.js"></script>
 <script src="mp-ui.js"></script>
-<script src="mobile-controls.js"></script>
+<script src="mobile-controls.js?v=10"></script>
 <script src="game.js"></script>
-<script src="loader.js"></script>
+<script src="loader.js?v=10"></script>
 </body>
 </html>
