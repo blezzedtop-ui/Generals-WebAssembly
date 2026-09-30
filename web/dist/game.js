@@ -102,7 +102,14 @@ function gxInstallKeyGuard() {
   window.addEventListener('keydown', window.gxKeyGuard, { capture: true });
 }
 
+function gxEngineStage(message) {
+  console.log('[stage]', message);
+  const d = document.getElementById('gx-detail');
+  if (d) d.textContent = message;
+}
+
 async function gxStartGame() {
+  gxEngineStage('4/9 Engine ishga tushirilmoqda…');
   // Engine wasm was pre-downloaded by gxPreloadEngine() into window.gxEngine.
   const buildId = window.gxEngine.buildId || 'dev';
   const wasmBinary = window.gxEngine.wasmBinary;
@@ -130,12 +137,17 @@ async function gxStartGame() {
       gxBuildName: localStorage.getItem('gx-build') || 'default_ru',
       print: (t) => console.log('[game]', t),
       printErr: (t) => {
+        if (t.includes('game storage mounted')) gxEngineStage('6/9 OPFS ulandi…');
+        else if (t.includes('Initializing SDL3')) gxEngineStage('7/9 SDL3 ishga tushmoqda…');
+        else if (t.includes('SDL3 window created successfully')) gxEngineStage('8/9 O‘yin oynasi tayyor…');
+        else if (t.includes('main loop armed')) gxEngineStage('9/9 O‘yin tayyor…');
         // Drop known per-frame spam (same filter the iOS port uses in its
         // log sink) - keeps the console usable during real sessions.
         if (t.startsWith('[GX-ISSUE144]') || t.startsWith('[INI] ')) return;
         console.warn('[game]', t);
       },
       onRuntimeInitialized: () => {
+        gxEngineStage('5/9 WASM runtime tayyor…');
         console.log('[game] runtime initialized');
         resolve();
       },
@@ -151,6 +163,7 @@ async function gxStartGame() {
 
     const s = document.createElement('script');
     s.src = 'GeneralsXZH.js?v=' + buildId;
+    s.onload = () => gxEngineStage('5/9 Engine JS yuklandi…');
     s.onerror = () => reject(new Error('Не удалось загрузить GeneralsXZH.js'));
     document.body.appendChild(s);
   });
