@@ -277,6 +277,17 @@ function gxLocalRelativePath(file) {
   return parts.join('/');
 }
 
+async function gxAssetPreflight(storage) {
+  const paths = storage.listPaths ? await storage.listPaths() : [];
+  const lower = paths.map(p => String(p).replace(/\\/g, '/').toLowerCase());
+  const has = suffix => lower.some(p => p.endsWith('/' + suffix) || p === suffix);
+  const zh = ['inizh.big', 'w3dzh.big'];
+  const base = ['terrain.big', 'textures.big', 'w3d.big'];
+  const missingZH = zh.filter(n => !has(n));
+  const missingBase = base.filter(n => !has('gamedatagenerals/' + n));
+  return { ok: !missingZH.length && !missingBase.length, missingZH, missingBase, count: paths.length };
+}
+
 async function gxImportBaseGeneralsFolder(storage, files) {
   const list = Array.from(files || []).filter(f => f && f.size >= 0);
   if (!list.length) throw new Error('No files selected.');
@@ -473,6 +484,19 @@ async function gxBoot() {
         wipeArmed = false;
       }
     });
+
+    const preflight = await gxAssetPreflight(storage);
+    if (!preflight.ok) {
+      const problems = [];
+      if (preflight.missingZH.length) problems.push('Zero Hour: ' + preflight.missingZH.join(', '));
+      if (preflight.missingBase.length) problems.push('C&C Generals: ' + preflight.missingBase.join(', '));
+      gxUI.error('Game files incomplete. Import both folders first. Missing: ' + problems.join(' | '));
+      if (localImportBtn) localImportBtn.style.display = '';
+      if (baseImportBtn) baseImportBtn.style.display = '';
+      btn.disabled = true;
+    } else {
+      gxUI.detail.textContent = 'Assets verified: Zero Hour + base Generals (' + preflight.count + ' stored files).';
+    }
 
     await new Promise((resolve) => btn.addEventListener('click', async () => {
       if (window.gxEnterMobileGameMode) await window.gxEnterMobileGameMode();
