@@ -339,13 +339,23 @@ async function gxAssetPreflight(storage) {
   // the known root archives directly is dramatically faster and avoids the
   // launcher appearing frozen at “Initializing…”.
   const checks = await Promise.all([
-    storage.has('INIZH.big'), storage.has('W3DZH.big'),
+    storage.has('INIZH.big'),
+    storage.has('W3DZH.big'),
+    storage.has('TexturesZH.big'),
+    storage.has('TerrainZH.big'),
     storage.has('GameDataGenerals/Terrain.big'),
     storage.has('GameDataGenerals/Textures.big'),
     storage.has('GameDataGenerals/W3D.big')
   ]);
-  const missingZH=[]; if(!checks[0]) missingZH.push('inizh.big'); if(!checks[1]) missingZH.push('w3dzh.big');
-  const missingBase=[]; if(!checks[2]) missingBase.push('terrain.big'); if(!checks[3]) missingBase.push('textures.big'); if(!checks[4]) missingBase.push('w3d.big');
+  const missingZH=[];
+  if(!checks[0]) missingZH.push('inizh.big');
+  if(!checks[1]) missingZH.push('w3dzh.big');
+  if(!checks[2]) missingZH.push('textureszh.big');
+  if(!checks[3]) missingZH.push('terrainzh.big');
+  const missingBase=[];
+  if(!checks[4]) missingBase.push('terrain.big');
+  if(!checks[5]) missingBase.push('textures.big');
+  if(!checks[6]) missingBase.push('w3d.big');
   return {ok:!missingZH.length&&!missingBase.length,missingZH,missingBase,count:'verified'};
 }
 
