@@ -30,6 +30,7 @@
 
 #include <emscripten.h>
 #include <emscripten/html5.h>
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <string>
