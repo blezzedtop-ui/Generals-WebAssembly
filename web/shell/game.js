@@ -49,6 +49,12 @@ function gxGameArguments() {
   const p = new URLSearchParams(location.search);
   const raw = p.get('args');
   const args = raw ? raw.split(' ').filter(Boolean) : [];
+  // GeneralsX @bugfix OpenAI 01/10/2026 The engine's -quickstart flag disables the original ShellMap via parseNoShellMap().
+  // Keep fast intro skipping without sacrificing the animated Generals menu background.
+  for (let i = args.length - 1; i >= 0; --i) {
+    if (args[i].toLowerCase() === '-quickstart' || args[i].toLowerCase() === '-noshellmap') args.splice(i, 1);
+  }
+  if (!args.some(a => a.toLowerCase() === '-nologo')) args.push('-nologo');
   // Loader settings (index.html #gx-settings): FPS limit -> engine -fps.
   // An explicit -fps in ?args= wins.
   if (!args.includes('-fps')) {
