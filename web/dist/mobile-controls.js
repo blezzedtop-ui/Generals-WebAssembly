@@ -93,7 +93,7 @@
     cv.addEventListener('contextmenu',e=>e.preventDefault());
   }
 
-  let one=null, dragging=false, longTimer=null, two=null, lastTap={t:0,p:null};
+  let one=null, dragging=false, longTimer=null, two=null, lastTap={t:0,p:null}, selectArmed=false;
   const clearLong=()=>{ if(longTimer) clearTimeout(longTimer); longTimer=null; };
   function resetOne(){ clearLong(); one=null; dragging=false; }
 
@@ -121,7 +121,7 @@
     if(e.cancelable) e.preventDefault();
     if(e.touches.length===1 && one){
       const p=touchPoint(e.touches[0]); one.last=p;
-      if(!dragging && dist(p,one.start)>9){
+      if(selectArmed && !dragging && dist(p,one.start)>9){
         dragging=true; clearLong(); move(one.start,0); mouse('mousedown',one.start,0,1);
       }
       if(dragging) move(p,1);
@@ -152,7 +152,7 @@
     if(!one || e.touches.length) return;
     const t=e.changedTouches?.[0], p=t?touchPoint(t):one.last;
     if(one.longPressed){ resetOne(); return; }
-    if(dragging){ move(p,1); mouse('mouseup',p,0,0); }
+    if(dragging){ move(p,1); mouse('mouseup',p,0,0); selectArmed=false; document.getElementById('gx-m-select')?.classList.remove('gx-active'); }
     else {
       const now=performance.now();
       click(p,0);
@@ -189,6 +189,9 @@
       box.querySelectorAll('[data-key]').forEach(b=>b.addEventListener('pointerdown',e=>{
         e.preventDefault();e.stopPropagation();key(b.dataset.key,b.dataset.code);
       }));
+      box.querySelector('[data-select]')?.addEventListener('pointerdown',e=>{
+        e.preventDefault();e.stopPropagation();selectArmed=!selectArmed;e.currentTarget.classList.toggle('gx-active',selectArmed);
+      });
       box.querySelector('[data-fullscreen]')?.addEventListener('pointerdown',async e=>{
         e.preventDefault();e.stopPropagation();await immersive();
       });
