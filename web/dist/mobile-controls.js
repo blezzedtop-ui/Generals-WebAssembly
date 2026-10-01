@@ -57,13 +57,28 @@
     setTimeout(()=>cv.dispatchEvent(new KeyboardEvent('keyup',opts)),70);
   }
 
+  function sendEscape(){
+    const cv=focusCanvas(); if(!cv) return;
+    // GeneralsX @bugfix OpenAI 01/10/2026 Safari synthetic KeyboardEvent fields are read-only/untrusted for SDL.
+    // Emscripten listens on the window/document path, so dispatch the Escape pulse on both targets.
+    const opts={key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true,cancelable:true,composed:true};
+    for(const t of [cv,document,window]){ try{t.dispatchEvent(new KeyboardEvent('keydown',opts));}catch{} }
+    setTimeout(()=>{for(const t of [cv,document,window]){try{t.dispatchEvent(new KeyboardEvent('keyup',opts));}catch{}}},80);
+  }
+
   async function immersive(){
     document.documentElement.classList.add('gx-immersive','gx-iphone');
     // iPhone Safari normally does not expose arbitrary page fullscreen/orientation
     // locking. Keep these as progressive enhancement, then force viewport sizing.
     try { if(screen.orientation?.lock) await screen.orientation.lock('landscape'); } catch {}
-    try { if(!document.fullscreenElement && document.documentElement.requestFullscreen)
-      await document.documentElement.requestFullscreen({navigationUI:'hide'}); } catch {}
+    try {
+      const cv=canvas();
+      if(!document.fullscreenElement){
+        if(cv?.requestFullscreen) await cv.requestFullscreen({navigationUI:'hide'});
+        else if(cv?.webkitRequestFullscreen) cv.webkitRequestFullscreen();
+        else if(document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({navigationUI:'hide'});
+      }
+    } catch {}
     const settle=()=>{
       const vv=window.visualViewport;
       const w=Math.max(1,Math.round(vv?vv.width:innerWidth));
@@ -187,7 +202,8 @@
     if(box){
       box.hidden=false;
       box.querySelectorAll('[data-key]').forEach(b=>b.addEventListener('pointerdown',e=>{
-        e.preventDefault();e.stopPropagation();key(b.dataset.key,b.dataset.code);
+        e.preventDefault();e.stopPropagation();
+        if(b.dataset.key==='Escape') sendEscape(); else key(b.dataset.key,b.dataset.code);
       }));
       box.querySelector('[data-select]')?.addEventListener('pointerdown',e=>{
         e.preventDefault();e.stopPropagation();selectArmed=!selectArmed;e.currentTarget.classList.toggle('gx-active',selectArmed);
@@ -202,7 +218,7 @@
         e.preventDefault();e.stopPropagation();key('F10','F10');
       });
       box.querySelector('[data-close]')?.addEventListener('pointerdown',e=>{
-        e.preventDefault();e.stopPropagation();key('Escape','Escape');
+        e.preventDefault();e.stopPropagation();sendEscape();
       });
     }
   }
