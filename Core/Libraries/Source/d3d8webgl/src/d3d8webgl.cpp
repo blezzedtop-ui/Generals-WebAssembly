@@ -1683,6 +1683,10 @@ public:
 		case D3DFMT_A8:
 		case D3DFMT_L8:
 		case D3DFMT_A8L8:
+			// These formats are uploaded directly by the WebGL pipeline and do
+			// not depend on S3TC. The previous fallthrough incorrectly rejected
+			// every normal RGB/RGBA texture on Safari when S3TC was unavailable.
+			return D3D_OK;
 		case D3DFMT_DXT1:
 		case D3DFMT_DXT2:
 		case D3DFMT_DXT3:

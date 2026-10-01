@@ -102,23 +102,22 @@ extern Int GameMain();
 
 // Native browser -> SDL key bridge. Exported to JS as Module._gxWebSendKey.
 // This bypasses untrusted synthetic KeyboardEvent on iPhone Safari.
+extern "C" EMSCRIPTEN_KEEPALIVE void gxWebSendKeyState(int keycode, int isDown)
+{
+	const bool down = isDown != 0;
+	SDL_Event e{};
+	e.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+	e.key.type = down ? (SDL_EventType)SDL_EVENT_KEY_DOWN : (SDL_EventType)SDL_EVENT_KEY_UP;
+	e.key.down = down;
+	e.key.repeat = false;
+	e.key.key = (SDL_Keycode)keycode;
+	SDL_PushEvent(&e);
+}
+
 extern "C" EMSCRIPTEN_KEEPALIVE void gxWebSendKey(int keycode)
 {
-	SDL_Event down{};
-	down.type = SDL_EVENT_KEY_DOWN;
-	down.key.type = SDL_EVENT_KEY_DOWN;
-	down.key.down = true;
-	down.key.repeat = false;
-	down.key.key = (SDL_Keycode)keycode;
-	SDL_PushEvent(&down);
-
-	SDL_Event up{};
-	up.type = SDL_EVENT_KEY_UP;
-	up.key.type = SDL_EVENT_KEY_UP;
-	up.key.down = false;
-	up.key.repeat = false;
-	up.key.key = (SDL_Keycode)keycode;
-	SDL_PushEvent(&up);
+	gxWebSendKeyState(keycode, 1);
+	gxWebSendKeyState(keycode, 0);
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE void gxWebSendMouse(int type, float x, float y, int button, int buttons)

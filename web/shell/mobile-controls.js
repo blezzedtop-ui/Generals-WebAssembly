@@ -60,23 +60,53 @@
       clientX:p.x,clientY:p.y,deltaY,deltaMode:0}));
   }
   const sdlKeys={Escape:27,ArrowRight:1073741903,ArrowLeft:1073741904,ArrowDown:1073741905,ArrowUp:1073741906,F5:1073741886,F10:1073741891};
+  const nativeKeyReleases=new Map();
   function key(name,code=name){
     focusCanvas();
-    // GeneralsX @bugfix OpenAI 01/10/2026 Prefer native SDL input on Safari; synthetic KeyboardEvents are untrusted.
+    // Keep native keys down across at least one render/input tick. Sending SDL
+    // KEY_DOWN + KEY_UP back-to-back made held actions such as camera pan vanish.
     const nativeKey=sdlKeys[name]||sdlKeys[code];
+    if(nativeKey && window.Module?._gxWebSendKeyState){
+      Module._gxWebSendKeyState(nativeKey,1);
+      const previous=nativeKeyReleases.get(nativeKey);
+      if(previous) clearTimeout(previous);
+      const timer=setTimeout(()=>{
+        if(window.Module?._gxWebSendKeyState) Module._gxWebSendKeyState(nativeKey,0);
+        nativeKeyReleases.delete(nativeKey);
+      },90);
+      nativeKeyReleases.set(nativeKey,timer);
+      return;
+    }
     if(nativeKey && window.Module?._gxWebSendKey){ Module._gxWebSendKey(nativeKey); return; }
     const cv=canvas(); if(!cv) return;
     const opts={key:name,code,bubbles:true,cancelable:true,composed:true};
     cv.dispatchEvent(new KeyboardEvent('keydown',opts));
-    setTimeout(()=>cv.dispatchEvent(new KeyboardEvent('keyup',opts)),70);
+    setTimeout(()=>cv.dispatchEvent(new KeyboardEvent('keyup',opts)),90);
   }
 
   function sendEscape(){ key('Escape','Escape'); }
 
-  async function immersive(){
+  function syncViewport(){
     document.documentElement.classList.add('gx-immersive','gx-iphone');
+    const vv=window.visualViewport;
+    const w=Math.max(1,Math.round(vv?vv.width:innerWidth));
+    const h=Math.max(1,Math.round(vv?vv.height:innerHeight));
+    document.documentElement.style.setProperty('--gx-vw',w+'px');
+    document.documentElement.style.setProperty('--gx-vh',h+'px');
+    const cv=canvas();
+    if(cv){
+      cv.style.width=w+'px'; cv.style.height=h+'px';
+      if(window.Module?.calledRun){
+        try { Module.setCanvasSize(w,h,false); } catch {}
+      }
+    }
+    scrollTo(0,0); focusCanvas();
+  }
+
+  async function immersive(){
     // iPhone Safari normally does not expose arbitrary page fullscreen/orientation
-    // locking. Keep these as progressive enhancement, then force viewport sizing.
+    // locking. Keep these as progressive enhancement; viewport sync itself does
+    // not depend on fullscreen permission and is always applied.
     try { if(screen.orientation?.lock) await screen.orientation.lock('landscape'); } catch {}
     try {
       const cv=canvas();
@@ -86,23 +116,7 @@
         else if(document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({navigationUI:'hide'});
       }
     } catch {}
-    const settle=()=>{
-      const vv=window.visualViewport;
-      const w=Math.max(1,Math.round(vv?vv.width:innerWidth));
-      const h=Math.max(1,Math.round(vv?vv.height:innerHeight));
-      document.documentElement.style.setProperty('--gx-vw',w+'px');
-      document.documentElement.style.setProperty('--gx-vh',h+'px');
-      const cv=canvas();
-      if(cv){
-        cv.style.width=w+'px'; cv.style.height=h+'px';
-        if(window.Module?.calledRun){
-          try { Module.setCanvasSize(w,h,false); } catch {}
-        }
-      }
-      scrollTo(0,0); focusCanvas();
-      dispatchEvent(new Event('resize'));
-    };
-    settle(); setTimeout(settle,150); setTimeout(settle,500);
+    syncViewport(); setTimeout(syncViewport,150); setTimeout(syncViewport,500);
   }
   window.gxEnterMobileGameMode=immersive;
 
@@ -198,6 +212,9 @@
 
   function bind(){
     prepareCanvas();
+    // Apply edge-to-edge visualViewport sizing immediately, even when Safari
+    // refuses Fullscreen API or the page was already opened in landscape.
+    syncViewport();
     // Capture on document so SDL's own touch listeners cannot consume the gesture first.
     document.addEventListener('touchstart',onStart,{passive:false,capture:true});
     document.addEventListener('touchmove',onMove,{passive:false,capture:true});
@@ -206,8 +223,8 @@
     document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
     document.addEventListener('gesturechange',e=>e.preventDefault(),{passive:false});
     document.addEventListener('dblclick',e=>{ if(e.target===canvas()) e.preventDefault(); },{passive:false});
-    addEventListener('orientationchange',()=>setTimeout(immersive,180));
-    if(window.visualViewport) visualViewport.addEventListener('resize',()=>immersive());
+    addEventListener('orientationchange',()=>setTimeout(syncViewport,180));
+    if(window.visualViewport) visualViewport.addEventListener('resize',syncViewport);
 
     const box=document.getElementById('gx-mobile-controls');
     if(box){
