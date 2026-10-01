@@ -57,4 +57,9 @@ jobs:
           git add -f web/dist
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "Build web engine bundle [skip ci]"
-          git push
+          # The engine build is long-running. main may advance while it builds.
+          # Rebase the generated bundle commit onto the latest remote main so
+          # publishing never fails only because a newer source commit landed.
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
