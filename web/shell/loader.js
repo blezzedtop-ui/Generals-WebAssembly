@@ -336,22 +336,16 @@ async function gxImportCombinedFolder(storage, files) {
 
 // GeneralsX @bugfix OpenAI 01/10/2026 Stage an Arial-compatible FreeType face for Web builds.
 async function gxEnsureWebFont(storage) {
-  if (await storage.has('fonts/arial.ttf')) return;
-  const url='https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz';
-  const resp=await fetch(url,{mode:'cors'});
-  if(!resp.ok) throw new Error('Unable to download the web UI font ('+resp.status+').');
-  const raw=await new Response(resp.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
-  const u8=new Uint8Array(raw), dec=new TextDecoder(); let p=0, font=null;
-  while(p+512<=u8.length){
-    const name=dec.decode(u8.subarray(p,p+100)).replace(/\0.*$/,'');
-    const sizeText=dec.decode(u8.subarray(p+124,p+136)).replace(/\0.*$/,'').trim();
-    const size=parseInt(sizeText||'0',8)||0; p+=512;
-    if(/(^|\/)LiberationSans-Regular\.ttf$/i.test(name)){font=new Blob([u8.slice(p,p+size)],{type:'font/ttf'});break;}
-    p+=Math.ceil(size/512)*512;
-  }
-  if(!font) throw new Error('LiberationSans-Regular.ttf was not found in the font package.');
-  await storage.writeBlob('fonts/arial.ttf',font);
-  console.log('[loader] staged fonts/arial.ttf for FreeType');
+  if (await storage.has('fonts/arial.ttf')) return true;
+  // GeneralsX @bugfix OpenAI 01/10/2026 Use a CORS-enabled static TTF; Safari rejected the GitHub release redirect.
+  const url='https://fonts.gstatic.com/s/notosansdisplay/v20/RLplK4fy6r6tOBEJg0IAKzqdFZVZxokvfn_BDLxR.ttf';
+  const resp=await fetch(url,{mode:'cors',cache:'force-cache'});
+  if(!resp.ok) throw new Error('UI font HTTP '+resp.status);
+  const blob=await resp.blob();
+  if(blob.size<10000) throw new Error('UI font response is incomplete');
+  await storage.writeBlob('fonts/arial.ttf',blob);
+  console.log('[loader] staged fonts/arial.ttf ('+blob.size+' bytes)');
+  return true;
 }
 
 async function gxAssetPreflight(storage) {
