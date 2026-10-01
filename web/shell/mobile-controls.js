@@ -83,6 +83,13 @@
       const h=Math.max(1,Math.round(vv?vv.height:innerHeight));
       document.documentElement.style.setProperty('--gx-vw',w+'px');
       document.documentElement.style.setProperty('--gx-vh',h+'px');
+      const cv=canvas();
+      if(cv){
+        cv.style.width=w+'px'; cv.style.height=h+'px';
+        if(window.Module?.calledRun){
+          try { Module.setCanvasSize(w,h,false); } catch {}
+        }
+      }
       scrollTo(0,0); focusCanvas();
       dispatchEvent(new Event('resize'));
     };
@@ -118,6 +125,8 @@
       clearLong();
       // GeneralsX @bugfix OpenAI 01/10/2026 Never leave a SELECT mouse-down held when a second finger starts camera pan.
       if(dragging && one) mouse('mouseup',one.last,0,0);
+      selectArmed=false;
+      document.getElementById('gx-m-select')?.classList.remove('gx-active');
       one=null; dragging=false;
       const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]),m=midpoint(a,b);
       two={mid:m,dist:dist(a,b),moved:false};
@@ -189,10 +198,7 @@
     document.addEventListener('gesturechange',e=>e.preventDefault(),{passive:false});
     document.addEventListener('dblclick',e=>{ if(e.target===canvas()) e.preventDefault(); },{passive:false});
     addEventListener('orientationchange',()=>setTimeout(immersive,180));
-    if(window.visualViewport) visualViewport.addEventListener('resize',()=> {
-      document.documentElement.style.setProperty('--gx-vw',visualViewport.width+'px');
-      document.documentElement.style.setProperty('--gx-vh',visualViewport.height+'px');
-    });
+    if(window.visualViewport) visualViewport.addEventListener('resize',()=>immersive());
 
     const box=document.getElementById('gx-mobile-controls');
     if(box){
