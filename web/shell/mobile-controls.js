@@ -35,6 +35,15 @@
   function mouse(type,p,button=0,buttons=0) {
     const cv=focusCanvas(); if(!cv) return;
     p=clampPoint(p);
+    const r=cv.getBoundingClientRect();
+    const x=(p.x-r.left)*cv.width/Math.max(1,r.width);
+    const y=(p.y-r.top)*cv.height/Math.max(1,r.height);
+    if(window.Module?._gxWebSendMouse){
+      const nativeType=type==='mousemove'?0:(type==='mousedown'?1:2);
+      const sdlButton=button===2?3:1;
+      Module._gxWebSendMouse(nativeType,x,y,sdlButton,buttons);
+      return;
+    }
     cv.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,composed:true,view:window,
       clientX:p.x,clientY:p.y,screenX:p.x,screenY:p.y,button,buttons}));
   }
