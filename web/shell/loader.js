@@ -612,7 +612,9 @@ async function gxBoot() {
       }
     });
 
-    await gxEnsureWebFont(storage);
+    // Font staging is optional at boot: Safari reports generic "Load failed" for blocked cross-origin fetches.
+    // GeneralsX @bugfix OpenAI 01/10/2026 Never let the UI-font helper abort loading the actual game assets.
+    try { await gxEnsureWebFont(storage); } catch (e) { console.warn('[loader] optional web font staging skipped:', e); }
 
     const preflight = await gxAssetPreflight(storage);
     if (!preflight.ok) {
