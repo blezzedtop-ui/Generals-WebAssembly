@@ -137,7 +137,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void gxWebSendMouse(int type, float x, float y, 
 	} else {
 		const bool down = type == 1;
 		e.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
-		e.button.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+		e.button.type = down ? (SDL_EventType)SDL_EVENT_MOUSE_BUTTON_DOWN : (SDL_EventType)SDL_EVENT_MOUSE_BUTTON_UP;
 		e.button.windowID = TheSDL3Window ? SDL_GetWindowID(TheSDL3Window) : 0;
 		e.button.which = SDL_TOUCH_MOUSEID;
 		e.button.button = (Uint8)button;
