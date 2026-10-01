@@ -1217,7 +1217,8 @@ void WebGLPipeline::applyFixedState(WebGLDevice *dev)
 	// (top portion of the screen) rendered shifted DOWN by RTH-H, leaving a
 	// black band on top and offsetting picking by the same amount.
 	const D3DVIEWPORT8 &vp = dev->getViewport();
-	glViewport((GLint)vp.X, (GLint)vp.Y, (GLsizei)vp.Width, (GLsizei)vp.Height);
+	const GLint glVpY = (GLint)m_curRTHeight - (GLint)vp.Y - (GLint)vp.Height;
+	glViewport((GLint)vp.X, glVpY, (GLsizei)vp.Width, (GLsizei)vp.Height);
 	glDepthRangef(vp.MinZ, vp.MaxZ);
 }
 
@@ -1500,7 +1501,8 @@ void WebGLPipeline::clear(WebGLDevice *dev, unsigned flags, uint32_t argb, float
 	if (!full) {
 		glEnable(GL_SCISSOR_TEST);
 		// Same top-origin placement as the glViewport call in applyFixedState.
-		glScissor((GLint)vp.X, (GLint)vp.Y, (GLsizei)vp.Width, (GLsizei)vp.Height);
+		const GLint glScissorY = (GLint)m_curRTHeight - (GLint)vp.Y - (GLint)vp.Height;
+		glScissor((GLint)vp.X, glScissorY, (GLsizei)vp.Width, (GLsizei)vp.Height);
 	}
 
 	GLbitfield mask = 0;
