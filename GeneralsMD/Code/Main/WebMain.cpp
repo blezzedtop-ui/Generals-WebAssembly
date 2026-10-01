@@ -121,6 +121,34 @@ extern "C" EMSCRIPTEN_KEEPALIVE void gxWebSendKey(int keycode)
 	SDL_PushEvent(&up);
 }
 
+extern "C" EMSCRIPTEN_KEEPALIVE void gxWebSendMouse(int type, float x, float y, int button, int buttons)
+{
+	SDL_Event e{};
+	if (type == 0) {
+		e.type = SDL_EVENT_MOUSE_MOTION;
+		e.motion.type = SDL_EVENT_MOUSE_MOTION;
+		e.motion.windowID = TheSDL3Window ? SDL_GetWindowID(TheSDL3Window) : 0;
+		e.motion.which = SDL_TOUCH_MOUSEID;
+		e.motion.x = x;
+		e.motion.y = y;
+		e.motion.xrel = 0.0f;
+		e.motion.yrel = 0.0f;
+		e.motion.state = (SDL_MouseButtonFlags)buttons;
+	} else {
+		const bool down = type == 1;
+		e.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+		e.button.type = e.type;
+		e.button.windowID = TheSDL3Window ? SDL_GetWindowID(TheSDL3Window) : 0;
+		e.button.which = SDL_TOUCH_MOUSEID;
+		e.button.button = (Uint8)button;
+		e.button.down = down;
+		e.button.clicks = 1;
+		e.button.x = x;
+		e.button.y = y;
+	}
+	SDL_PushEvent(&e);
+}
+
 /**
  * CreateGameEngine
  *
@@ -452,7 +480,7 @@ int main(int argc, char* argv[])
 			fprintf(stderr, "INFO: Creating SDL3 window (canvas)...\n");
 			TheSDL3Window = SDL_CreateWindow(
 				"Command & Conquer Generals: Zero Hour",
-				1024, 768,
+				webRenderW, webRenderH,
 				SDL_WINDOW_RESIZABLE
 			);
 
