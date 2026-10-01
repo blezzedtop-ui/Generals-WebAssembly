@@ -65,8 +65,19 @@
     try { if(!document.fullscreenElement && document.documentElement.requestFullscreen)
       await document.documentElement.requestFullscreen({navigationUI:'hide'}); } catch {}
     const settle=()=>{
-      document.documentElement.style.setProperty('--gx-vw',innerWidth+'px');
-      document.documentElement.style.setProperty('--gx-vh',innerHeight+'px');
+      const vv=window.visualViewport;
+      const w=Math.max(1,Math.round(vv?vv.width:innerWidth));
+      const h=Math.max(1,Math.round(vv?vv.height:innerHeight));
+      document.documentElement.style.setProperty('--gx-vw',w+'px');
+      document.documentElement.style.setProperty('--gx-vh',h+'px');
+      // GeneralsX @bugfix OpenAI 01/10/2026 Keep the visible iPhone canvas and SDL/WebGL backing store in sync after landscape rotation.
+      const cv=canvas();
+      if(cv){
+        cv.style.width=w+'px'; cv.style.height=h+'px';
+        if(window.Module?.calledRun){
+          try { Module.setCanvasSize(w,h,false); } catch {}
+        }
+      }
       scrollTo(0,0); focusCanvas();
       dispatchEvent(new Event('resize'));
     };
@@ -170,9 +181,7 @@
     document.addEventListener('gesturechange',e=>e.preventDefault(),{passive:false});
     document.addEventListener('dblclick',e=>{ if(e.target===canvas()) e.preventDefault(); },{passive:false});
     addEventListener('orientationchange',()=>setTimeout(immersive,180));
-    if(window.visualViewport) visualViewport.addEventListener('resize',()=> {
-      document.documentElement.style.setProperty('--gx-vh',visualViewport.height+'px');
-    });
+    if(window.visualViewport) visualViewport.addEventListener('resize',()=>immersive());
 
     const box=document.getElementById('gx-mobile-controls');
     if(box){
