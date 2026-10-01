@@ -126,6 +126,9 @@
       clearLong();
       // GeneralsX @bugfix OpenAI 01/10/2026 Never leave a SELECT mouse-down held when a second finger starts camera pan.
       if(dragging && one) mouse('mouseup',one.last,0,0);
+      // A camera gesture cancels any armed/active SELECT so it cannot leak a held mouse state.
+      selectArmed=false;
+      document.getElementById('gx-m-select')?.classList.remove('gx-active');
       one=null; dragging=false;
       const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]),m=midpoint(a,b);
       two={mid:m,dist:dist(a,b),moved:false};
