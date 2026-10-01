@@ -50,21 +50,19 @@
     cv.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,composed:true,view:window,
       clientX:p.x,clientY:p.y,deltaY,deltaMode:0}));
   }
+  const sdlKeys={Escape:27,ArrowRight:1073741903,ArrowLeft:1073741904,ArrowDown:1073741905,ArrowUp:1073741906,F5:1073741886,F10:1073741891};
   function key(name,code=name){
-    const cv=focusCanvas(); if(!cv) return;
+    focusCanvas();
+    // GeneralsX @bugfix OpenAI 01/10/2026 Prefer native SDL input on Safari; synthetic KeyboardEvents are untrusted.
+    const nativeKey=sdlKeys[name]||sdlKeys[code];
+    if(nativeKey && window.Module?._gxWebSendKey){ Module._gxWebSendKey(nativeKey); return; }
+    const cv=canvas(); if(!cv) return;
     const opts={key:name,code,bubbles:true,cancelable:true,composed:true};
     cv.dispatchEvent(new KeyboardEvent('keydown',opts));
     setTimeout(()=>cv.dispatchEvent(new KeyboardEvent('keyup',opts)),70);
   }
 
-  function sendEscape(){
-    const cv=focusCanvas(); if(!cv) return;
-    // GeneralsX @bugfix OpenAI 01/10/2026 Safari synthetic KeyboardEvent fields are read-only/untrusted for SDL.
-    // Emscripten listens on the window/document path, so dispatch the Escape pulse on both targets.
-    const opts={key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true,cancelable:true,composed:true};
-    for(const t of [cv,document,window]){ try{t.dispatchEvent(new KeyboardEvent('keydown',opts));}catch{} }
-    setTimeout(()=>{for(const t of [cv,document,window]){try{t.dispatchEvent(new KeyboardEvent('keyup',opts));}catch{}}},80);
-  }
+  function sendEscape(){ key('Escape','Escape'); }
 
   async function immersive(){
     document.documentElement.classList.add('gx-immersive','gx-iphone');
@@ -117,7 +115,10 @@
         if(navigator.vibrate) navigator.vibrate(18);
       },520);
     } else if(e.touches.length===2){
-      clearLong(); one=null; dragging=false;
+      clearLong();
+      // GeneralsX @bugfix OpenAI 01/10/2026 Never leave a SELECT mouse-down held when a second finger starts camera pan.
+      if(dragging && one) mouse('mouseup',one.last,0,0);
+      one=null; dragging=false;
       const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]),m=midpoint(a,b);
       two={mid:m,dist:dist(a,b),moved:false};
     }
@@ -189,6 +190,7 @@
     document.addEventListener('dblclick',e=>{ if(e.target===canvas()) e.preventDefault(); },{passive:false});
     addEventListener('orientationchange',()=>setTimeout(immersive,180));
     if(window.visualViewport) visualViewport.addEventListener('resize',()=> {
+      document.documentElement.style.setProperty('--gx-vw',visualViewport.width+'px');
       document.documentElement.style.setProperty('--gx-vh',visualViewport.height+'px');
     });
 
