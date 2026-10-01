@@ -119,6 +119,34 @@ function gxSyncIPhoneCanvas() {
   }
 }
 
+// GeneralsX @bugfix OpenAI 01/10/2026 Surface the engine's existing font diagnostics on web without rebuilding WASM.
+window.gxFontDiagnostics = { hits: 0, misses: 0, fallbackMissing: 0, localFontFailed: 0, lines: [] };
+function gxCaptureFontDiagnostic(line) {
+  if (!line || !line.startsWith('[GX-ISSUE144]')) return false;
+  const d = window.gxFontDiagnostics;
+  d.lines.push(line);
+  if (d.lines.length > 80) d.lines.shift();
+  if (line.includes('W3DFont load hit')) d.hits++;
+  if (line.includes('W3DFont load miss')) d.misses++;
+  if (line.includes('alternate unicode missing')) d.fallbackMissing++;
+  if (line.includes('local font add FAILED')) d.localFontFailed++;
+  try { sessionStorage.setItem('gx-font-diagnostics', JSON.stringify(d)); } catch {}
+  console.warn('[font-diagnostic]', line);
+  if (d.misses || d.localFontFailed) gxShowFontDiagnostic();
+  return true;
+}
+function gxShowFontDiagnostic() {
+  const d = window.gxFontDiagnostics;
+  let el = document.getElementById('gx-font-diagnostic');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'gx-font-diagnostic';
+    Object.assign(el.style, {position:'fixed',left:'8px',top:'8px',zIndex:'2147483647',maxWidth:'72vw',padding:'7px 9px',background:'rgba(120,0,0,.88)',color:'#fff',font:'11px/1.3 -apple-system,sans-serif',borderRadius:'6px',pointerEvents:'none'});
+    document.body.appendChild(el);
+  }
+  el.textContent = 'FONT DIAG: hit=' + d.hits + ' miss=' + d.misses + ' fallback=' + d.fallbackMissing + ' localFail=' + d.localFontFailed;
+}
+
 function gxEngineStage(message) {
   console.log('[stage]', message);
   const d = document.getElementById('gx-detail');
@@ -161,9 +189,10 @@ async function gxStartGame() {
         else if (t.includes('Initializing SDL3')) gxEngineStage('7/9 SDL3 ishga tushmoqda…');
         else if (t.includes('SDL3 window created successfully')) gxEngineStage('8/9 O‘yin oynasi tayyor…');
         else if (t.includes('main loop armed')) gxEngineStage('9/9 O‘yin tayyor…');
-        // Drop known per-frame spam (same filter the iOS port uses in its
-        // log sink) - keeps the console usable during real sessions.
-        if (t.startsWith('[GX-ISSUE144]') || t.startsWith('[INI] ')) return;
+        // Keep font diagnostics: the current WASM already emits enough data to
+        // distinguish missing fonts from glyph/WebGL rendering failures.
+        if (gxCaptureFontDiagnostic(t)) return;
+        if (t.startsWith('[INI] ')) return;
         console.warn('[game]', t);
       },
       onRuntimeInitialized: () => {
