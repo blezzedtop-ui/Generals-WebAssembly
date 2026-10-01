@@ -11686,10 +11686,11 @@ function SDL_IsEmscriptenJoystickXInput(device_index) {
 }
 
 // Imports from the Wasm binary.
-var _gxWebSendKey, _main, _malloc, _free, _pthread_self, _htonl, _htons, _ntohs, _SDL_free, _SDL_malloc, _SDL_calloc, _Emscripten_force_free, _SDL_realloc, _Emscripten_HandlePointerEnter, _Emscripten_HandlePointerLeave, _Emscripten_HandlePointerGeneric, _Emscripten_HandleMouseButtonUpGlobal, _Emscripten_SendDragEvent, _Emscripten_SendDragCompleteEvent, _Emscripten_SendDragTextEvent, _Emscripten_SendDragFileEvent, _Emscripten_HandleLockKeysCheck, _Emscripten_SendSystemThemeChangedEvent, _requestFullscreenThroughSDL, __emscripten_tls_init, __emscripten_proxy_main, __emscripten_run_callback_on_thread, __emscripten_set_offscreencanvas_size_on_thread, __emscripten_thread_init, __emscripten_thread_crashed, _emscripten_proxy_execute_queue, _emscripten_proxy_finish, __emscripten_run_js_on_main_thread, __emscripten_thread_free_data, __emscripten_thread_exit, __emscripten_check_mailbox, ___trap, _emscripten_stack_set_limits, __emscripten_stack_restore, __emscripten_stack_alloc, _emscripten_stack_get_current, __wasmfs_opfs_record_entry;
+var _gxWebSendKey, _gxWebSendMouse, _main, _malloc, _free, _pthread_self, _htonl, _htons, _ntohs, _SDL_free, _SDL_malloc, _SDL_calloc, _Emscripten_force_free, _SDL_realloc, _Emscripten_HandlePointerEnter, _Emscripten_HandlePointerLeave, _Emscripten_HandlePointerGeneric, _Emscripten_HandleMouseButtonUpGlobal, _Emscripten_SendDragEvent, _Emscripten_SendDragCompleteEvent, _Emscripten_SendDragTextEvent, _Emscripten_SendDragFileEvent, _Emscripten_HandleLockKeysCheck, _Emscripten_SendSystemThemeChangedEvent, _requestFullscreenThroughSDL, __emscripten_tls_init, __emscripten_proxy_main, __emscripten_run_callback_on_thread, __emscripten_set_offscreencanvas_size_on_thread, __emscripten_thread_init, __emscripten_thread_crashed, _emscripten_proxy_execute_queue, _emscripten_proxy_finish, __emscripten_run_js_on_main_thread, __emscripten_thread_free_data, __emscripten_thread_exit, __emscripten_check_mailbox, ___trap, _emscripten_stack_set_limits, __emscripten_stack_restore, __emscripten_stack_alloc, _emscripten_stack_get_current, __wasmfs_opfs_record_entry;
 
 function assignWasmExports(wasmExports) {
   Module["_gxWebSendKey"] = _gxWebSendKey = wasmExports["gxWebSendKey"];
+  Module["_gxWebSendMouse"] = _gxWebSendMouse = wasmExports["gxWebSendMouse"];
   Module["_main"] = _main = wasmExports["__main_argc_argv"];
   _malloc = wasmExports["malloc"];
   _free = wasmExports["free"];
