@@ -26,12 +26,8 @@
       ].join(';');
       document.body.appendChild(surface);
     }
-    // Physical touch must not reach Emscripten/SDL canvas directly.
     cv.style.setProperty('pointer-events','none','important');
     cv.style.setProperty('touch-action','none','important');
-
-    // Keep touch surface + controls inside fullscreen by redirecting canvas
-    // fullscreen requests to the document root.
     try {
       if (document.documentElement.requestFullscreen && cv.requestFullscreen && !cv.__gxRootFsRedirect) {
         cv.__gxRootFsRedirect = true;
@@ -101,9 +97,6 @@
     };
   }
 
-  // game.js is loaded after this file. Once available, replace only its mobile
-  // resolution values. Generals gets a stable ~600px-tall widescreen render;
-  // CSS then scales that frame to the exact visible phone viewport.
   const fullFillTimer = setInterval(() => {
     if (typeof window.gxGameArguments !== 'function') return;
     const originalArgs = window.gxGameArguments;
