@@ -20,6 +20,7 @@
     return;
   }
 
+  // Keep the display awake during long game sessions.
   let wakeLock = null;
   async function keepScreenAwake() {
     if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
@@ -45,6 +46,7 @@
     } else args.push(name, String(val));
   }
 
+  // Lower iPhone render pressure while preserving the visible aspect ratio.
   const started = performance.now();
   const argGuard = setInterval(() => {
     const current = window.gxGameArguments;
@@ -79,6 +81,7 @@
     if (performance.now() - started > 5000) clearInterval(argGuard);
   }, 5);
 
+  // Let WebKit restore a lost WebGL context instead of leaving a black canvas.
   function attachContextRecovery() {
     const cv = document.getElementById('canvas');
     if (!cv || cv.__gxContextRecoveryInstalled) return false;
@@ -99,6 +102,7 @@
     setTimeout(() => clearInterval(contextTimer), 10000);
   }
 
+  // Native SDL arrow codes used by the camera bridge.
   const RIGHT = 1073741903;
   const LEFT  = 1073741904;
   const DOWN  = 1073741905;
@@ -106,6 +110,9 @@
   const ESC   = 27;
   const arrowCodes = new Set([RIGHT, LEFT, DOWN, UP]);
 
+  // Smooth map-grab pan. Finger motion is low-pass filtered and translated to
+  // a short PWM key duty cycle. Slow finger movement pans slowly; faster swipes
+  // ramp toward normal camera speed without sudden full-speed jumps.
   const isUiTarget = t => !!(t && t.closest &&
     (t.closest('#gx-mobile-controls') || t.closest('#gx-overlay') || t.closest('#gx-mp')));
   const selectionActive = () => !!document.querySelector('#gx-m-select.gx-active');
@@ -162,6 +169,7 @@
       setHeld(emptySet);
       return;
     }
+    // 45% duty at tiny drags, easing to a continuous hold at normal swipe speed.
     const duty = Math.min(1, 0.45 + panStrength * 0.55);
     const phase = (now % PWM_PERIOD_MS) / PWM_PERIOD_MS;
     setHeld(phase < duty ? desired : emptySet);
@@ -195,6 +203,7 @@
   }
 
   function updateIntent(dx, dy) {
+    // Clamp Safari coordinate jumps, then use a normalized low-pass filter.
     dx = Math.max(-22, Math.min(22, dx));
     dy = Math.max(-22, Math.min(22, dy));
     filtX = filtX * 0.72 + dx * 0.28;
@@ -207,14 +216,17 @@
     const SECONDARY = 0.58;
     const next = new Set();
 
+    // Map-grab semantics: finger right => map follows finger, camera moves left.
     if (ax >= DEAD && (ay < DEAD || ax >= ay * SECONDARY)) next.add(filtX > 0 ? LEFT : RIGHT);
     if (ay >= DEAD && (ax < DEAD || ay >= ax * SECONDARY)) next.add(filtY > 0 ? UP : DOWN);
 
     desired = next;
+    // Ease camera speed according to finger speed instead of jumping to 100%.
     panStrength = next.size ? Math.max(0.10, Math.min(1, (speed - DEAD) / 5.8)) : 0;
     applyDesired();
 
     clearIdleRelease();
+    // Bridge small WebKit touchmove gaps, then decay smoothly and stop.
     idleRelease = setTimeout(() => {
       filtX *= 0.35;
       filtY *= 0.35;
@@ -290,6 +302,7 @@
 
     const wrapped = function (code, down) {
       if (!arrowCodes.has(code)) return nativeSend(code, down);
+      // During touch-pan, filtered PWM motion is the only camera input source.
       if (panTouchActive) return;
       return nativeSend(code, down);
     };
@@ -344,6 +357,8 @@
     return true;
   }
 
+  // Handle X in capture phase so it is one deterministic cancel action rather
+  // than double-firing the legacy close handler.
   document.addEventListener('pointerdown', e => {
     const btn = e.target?.closest?.('#gx-m-close,[data-close]');
     if (!btn) return;
@@ -351,6 +366,8 @@
     e.stopImmediatePropagation();
     resetPan(false);
 
+    // If box SELECT is armed, toggle it off through its own handler so the
+    // legacy core's internal selectArmed state stays in sync with the UI.
     const selectBtn = document.getElementById('gx-m-select');
     if (selectBtn?.classList.contains('gx-active')) {
       try {

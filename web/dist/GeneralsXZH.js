@@ -10793,68 +10793,76 @@ Module["cwrap"] = cwrap;
 var proxiedFunctionTable = [ _proc_exit, exitOnMainThread, pthreadCreateProxied, _alBufferData, _alDeleteBuffers, _alDeleteSources, _alSourcei, _alDistanceModel, _alGenBuffers, _alGenSources, _alGetBufferi, _alGetError, _alGetSourcei, _alListener3f, _alListenerfv, _alSource3f, _alSourcePause, _alSourcePlay, _alSourceQueueBuffers, _alSourceStop, _alSourceUnqueueBuffers, _alSourcef, _alcCloseDevice, _alcCreateContext, _alcDestroyContext, _alcGetString, _alcIsExtensionPresent, _alcMakeContextCurrent, _alcOpenDevice, _emscripten_exit_fullscreen, getCanvasSizeMainThread, setCanvasElementSizeMainThread, _emscripten_exit_pointerlock, _emscripten_get_device_pixel_ratio, _emscripten_get_element_css_size, _emscripten_get_fullscreen_status, _emscripten_get_gamepad_status, _emscripten_get_num_gamepads, _emscripten_get_preloaded_image_data, _emscripten_get_screen_size, _emscripten_request_fullscreen_strategy, _emscripten_request_pointerlock, _emscripten_sample_gamepad_data, _emscripten_set_beforeunload_callback_on_thread, _emscripten_set_blur_callback_on_thread, _emscripten_set_devicemotion_callback_on_thread, _emscripten_set_element_css_size, _emscripten_set_focus_callback_on_thread, _emscripten_set_fullscreenchange_callback_on_thread, _emscripten_set_gamepadconnected_callback_on_thread, _emscripten_set_gamepaddisconnected_callback_on_thread, _emscripten_set_keydown_callback_on_thread, _emscripten_set_keypress_callback_on_thread, _emscripten_set_keyup_callback_on_thread, _emscripten_set_orientationchange_callback_on_thread, _emscripten_set_pointerlockchange_callback_on_thread, _emscripten_set_resize_callback_on_thread, _emscripten_set_visibilitychange_callback_on_thread, _emscripten_set_wheel_callback_on_thread, _emscripten_set_window_title, _environ_get, _environ_sizes_get, _getaddrinfo ];
 
 var ASM_CONSTS = {
-  1224776: () => {
+  1224792: ($0, $1) => {
+    window.dispatchEvent(new CustomEvent("gx-mobile-save-load-status", {
+      detail: {
+        action: $0,
+        code: $1
+      }
+    }));
+  },
+  1224903: () => {
     const v = window.visualViewport;
     return Math.max(1, Math.round(v ? v.width : window.innerWidth));
   },
-  1224878: () => {
+  1225005: () => {
     const v = window.visualViewport;
     return Math.max(1, Math.round(v ? v.height : window.innerHeight));
   },
-  1224982: () => (typeof Module !== "undefined" && Module.gxFps) ? (Module.gxFps | 0) : 0,
-  1225067: ($0, $1, $2) => {
+  1225109: () => (typeof Module !== "undefined" && Module.gxFps) ? (Module.gxFps | 0) : 0,
+  1225194: ($0, $1, $2) => {
     if (window.gxIdbPutUserFile) {
       window.gxIdbPutUserFile(UTF8ToString($0), (growMemViews(), HEAPU8).slice($1, $1 + $2));
     }
   },
-  1225174: () => (typeof Module !== "undefined" && Module.gxStorageMode) ? Module.gxStorageMode : 0,
-  1225269: () => (typeof window !== "undefined" && window.gxFiles) ? window.gxFiles.length : 0,
-  1225359: ($0, $1, $2) => {
+  1225301: () => (typeof Module !== "undefined" && Module.gxStorageMode) ? Module.gxStorageMode : 0,
+  1225396: () => (typeof window !== "undefined" && window.gxFiles) ? window.gxFiles.length : 0,
+  1225486: ($0, $1, $2) => {
     stringToUTF8(window.gxFiles[$0].path, $1, $2);
   },
-  1225410: $0 => window.gxFiles[$0].data.byteLength,
-  1225457: ($0, $1, $2, $3) => {
+  1225537: $0 => window.gxFiles[$0].data.byteLength,
+  1225584: ($0, $1, $2, $3) => {
     (growMemViews(), HEAPU8).set(new Uint8Array(window.gxFiles[$0].data, $1, $2), $3 >>> 0);
   },
-  1225526: $0 => {
+  1225653: $0 => {
     window.gxFiles[$0].data = null;
   },
-  1225562: () => {
+  1225689: () => {
     window.gxFiles = null;
   },
-  1225589: () => {
+  1225716: () => {
     if (typeof gxOnEngineExit === "function") gxOnEngineExit(); else location.reload();
   },
-  1225677: () => {
+  1225804: () => {
     if (typeof gxShowMultiplayer === "function") gxShowMultiplayer();
   },
-  1225747: () => {
+  1225874: () => {
     if (typeof gxHideMultiplayer === "function") gxHideMultiplayer();
   },
-  1225817: () => {
+  1225944: () => {
     if (window.gxLoadScreen) window.gxLoadScreen.end();
   },
-  1225873: ($0, $1, $2) => {
+  1226e3: ($0, $1, $2) => {
     if (window.gxLoadScreen) {
       var px = (growMemViews(), HEAPU8).slice($0, $0 + $1 * $2 * 4);
       window.gxLoadScreen.frameRGBA(px, $1, $2);
     }
   },
-  1225994: () => {
+  1226121: () => {
     if (window.gxLoadScreen) window.gxLoadScreen.begin();
   },
-  1226052: () => (typeof gxNet !== "undefined" && gxNet.myVip) ? (gxNet.myVip >>> 0) : 0,
-  1226136: () => (typeof gxNet !== "undefined") ? (gxNet.meshEpoch | 0) : 0,
-  1226207: () => (typeof gxNet !== "undefined") ? (gxNet.myVip >>> 0) : 0,
-  1226276: $0 => {
+  1226179: () => (typeof gxNet !== "undefined" && gxNet.myVip) ? (gxNet.myVip >>> 0) : 0,
+  1226263: () => (typeof gxNet !== "undefined") ? (gxNet.meshEpoch | 0) : 0,
+  1226334: () => (typeof gxNet !== "undefined") ? (gxNet.myVip >>> 0) : 0,
+  1226403: $0 => {
     if (typeof gxNet !== "undefined") gxNet.close($0);
   },
-  1226331: ($0, $1, $2) => (typeof gxNet !== "undefined") ? (gxNet.bind($0, $1 >>> 0, $2) >>> 0) : ($1 >>> 0),
-  1226426: ($0, $1, $2, $3, $4) => {
+  1226458: ($0, $1, $2) => (typeof gxNet !== "undefined") ? (gxNet.bind($0, $1 >>> 0, $2) >>> 0) : ($1 >>> 0),
+  1226553: ($0, $1, $2, $3, $4) => {
     if (typeof gxNet !== "undefined") gxNet.send($0, $1 >>> 0, $2, $3, $4);
   },
-  1226502: ($0, $1, $2, $3, $4) => (typeof gxNet !== "undefined") ? gxNet.recv($0, $1, $2, $3, $4) : 0,
-  1226582: () => {
+  1226629: ($0, $1, $2, $3, $4) => (typeof gxNet !== "undefined") ? gxNet.recv($0, $1, $2, $3, $4) : 0,
+  1226709: () => {
     if (typeof (Module["SDL3"]) === "undefined") {
       Module["SDL3"] = {};
     }
@@ -10870,7 +10878,7 @@ var ASM_CONSTS = {
       };
     }
   },
-  1226896: $0 => {
+  1227023: $0 => {
     var str = UTF8ToString($0) + "\n\n" + "Abort/Retry/Ignore/AlwaysIgnore? [ariA] :";
     var reply = window.prompt(str, "i");
     if (reply === null) {
@@ -10878,13 +10886,13 @@ var ASM_CONSTS = {
     }
     return reply.length === 1 ? reply.charCodeAt(0) : -1;
   },
-  1227111: () => {
+  1227238: () => {
     Module["SDL3"].dummy_audio = {};
     Module["SDL3"].dummy_audio.timers = [];
     Module["SDL3"].dummy_audio.timers[0] = undefined;
     Module["SDL3"].dummy_audio.timers[1] = undefined;
   },
-  1227288: ($0, $1, $2, $3, $4) => {
+  1227415: ($0, $1, $2, $3, $4) => {
     var a = Module["SDL3"].dummy_audio;
     if (a.timers[$0] !== undefined) {
       clearInterval(a.timers[$0]);
@@ -10893,14 +10901,14 @@ var ASM_CONSTS = {
       dynCall("vi", $3, [ $4 ]);
     }, ($1 / $2) * 1e3);
   },
-  1227480: $0 => {
+  1227607: $0 => {
     var a = Module["SDL3"].dummy_audio;
     if (a.timers[$0] !== undefined) {
       clearInterval(a.timers[$0]);
     }
     a.timers[$0] = undefined;
   },
-  1227611: () => {
+  1227738: () => {
     if (typeof (AudioContext) !== "undefined") {
       return true;
     } else if (typeof (webkitAudioContext) !== "undefined") {
@@ -10908,7 +10916,7 @@ var ASM_CONSTS = {
     }
     return false;
   },
-  1227758: () => {
+  1227885: () => {
     if ((typeof (navigator.mediaDevices) !== "undefined") && (typeof (navigator.mediaDevices.getUserMedia) !== "undefined")) {
       return true;
     } else if (typeof (navigator.webkitGetUserMedia) !== "undefined") {
@@ -10916,7 +10924,7 @@ var ASM_CONSTS = {
     }
     return false;
   },
-  1227992: () => {
+  1228119: () => {
     var SDL3 = Module["SDL3"];
     if (typeof (SDL3.audio_playback) === "undefined") {
       SDL3.audio_playback = {};
@@ -10938,8 +10946,8 @@ var ASM_CONSTS = {
     }
     return (SDL3.audioContext !== undefined);
   },
-  1228571: () => Module["SDL3"].audioContext.sampleRate,
-  1228622: ($0, $1, $2, $3) => {
+  1228698: () => Module["SDL3"].audioContext.sampleRate,
+  1228749: ($0, $1, $2, $3) => {
     var SDL3 = Module["SDL3"];
     var have_microphone = function(stream) {
       if (SDL3.audio_recording.silenceTimer !== undefined) {
@@ -10981,7 +10989,7 @@ var ASM_CONSTS = {
       }, have_microphone, no_microphone);
     }
   },
-  1230463: ($0, $1, $2, $3) => {
+  1230590: ($0, $1, $2, $3) => {
     var SDL3 = Module["SDL3"];
     SDL3.audio_playback.scriptProcessorNode = SDL3.audioContext["createScriptProcessor"]($1, 0, $0);
     SDL3.audio_playback.scriptProcessorNode["onaudioprocess"] = function(e) {
@@ -11013,7 +11021,7 @@ var ASM_CONSTS = {
       SDL3.audio_playback.silenceTimer = setInterval(silence_callback, ($1 / SDL3.audioContext.sampleRate) * 1e3);
     }
   },
-  1231779: $0 => {
+  1231906: $0 => {
     var SDL3 = Module["SDL3"];
     if ($0) {
       if (SDL3.audio_recording.silenceTimer !== undefined) {
@@ -11047,7 +11055,7 @@ var ASM_CONSTS = {
       SDL3.audioContext = undefined;
     }
   },
-  1232935: ($0, $1) => {
+  1233062: ($0, $1) => {
     var SDL3 = Module["SDL3"];
     var buf = SDL3.CPtrToHeap32Index($0);
     var numChannels = SDL3.audio_playback.currentPlaybackBuffer["numberOfChannels"];
@@ -11061,7 +11069,7 @@ var ASM_CONSTS = {
       }
     }
   },
-  1233468: ($0, $1) => {
+  1233595: ($0, $1) => {
     var SDL3 = Module["SDL3"];
     var numChannels = SDL3.audio_recording.currentRecordingBuffer.numberOfChannels;
     for (var c = 0; c < numChannels; ++c) {
@@ -11080,7 +11088,7 @@ var ASM_CONSTS = {
       }
     }
   },
-  1234095: $0 => {
+  1234222: $0 => {
     let gamepads = navigator["getGamepads"]();
     if (!gamepads) {
       return 0;
@@ -11091,7 +11099,7 @@ var ASM_CONSTS = {
     }
     return 1;
   },
-  1234270: ($0, $1, $2) => {
+  1234397: ($0, $1, $2) => {
     let gamepads = navigator["getGamepads"]();
     if (!gamepads) {
       return 0;
@@ -11108,7 +11116,7 @@ var ASM_CONSTS = {
     });
     return 1;
   },
-  1234606: ($0, $1, $2, $3) => {
+  1234733: ($0, $1, $2, $3) => {
     var w = $0;
     var h = $1;
     var pixels = $2;
@@ -11139,7 +11147,7 @@ var ASM_CONSTS = {
     SDL3.ctx.putImageData(SDL3.image, 0, 0);
     return true;
   },
-  1235355: () => {
+  1235482: () => {
     var SDL3 = Module["SDL3"];
     SDL3["mouse_x"] = 0;
     SDL3["mouse_y"] = 0;
@@ -11165,7 +11173,7 @@ var ASM_CONSTS = {
       }
     });
   },
-  1236043: ($0, $1, $2, $3, $4) => {
+  1236170: ($0, $1, $2, $3, $4) => {
     var w = $0;
     var h = $1;
     var hot_x = $2;
@@ -11186,20 +11194,20 @@ var ASM_CONSTS = {
     stringToUTF8(url, urlBuf, url.length + 1);
     return urlBuf;
   },
-  1236701: $0 => {
+  1236828: $0 => {
     if (Module["canvas"]) {
       Module["canvas"].style["cursor"] = UTF8ToString($0);
     }
   },
-  1236784: () => {
+  1236911: () => {
     if (Module["canvas"]) {
       Module["canvas"].style["cursor"] = "none";
     }
   },
-  1236853: () => Module["SDL3"]["mouse_x"],
-  1236891: () => Module["SDL3"]["mouse_y"],
-  1236929: $0 => Module["SDL3"]["mouse_buttons"][$0],
-  1236977: $0 => {
+  1236980: () => Module["SDL3"]["mouse_x"],
+  1237018: () => Module["SDL3"]["mouse_y"],
+  1237056: $0 => Module["SDL3"]["mouse_buttons"][$0],
+  1237104: $0 => {
     var data = $0;
     document.sdlEventHandlerLockKeysCheck = function(event) {
       if ((event.key != "CapsLock") && (event.key != "NumLock") && (event.key != "ScrollLock")) {
@@ -11208,10 +11216,10 @@ var ASM_CONSTS = {
     };
     document.addEventListener("keydown", document.sdlEventHandlerLockKeysCheck);
   },
-  1237404: () => {
+  1237531: () => {
     document.removeEventListener("keydown", document.sdlEventHandlerLockKeysCheck);
   },
-  1237488: $0 => {
+  1237615: $0 => {
     var target = document;
     if (target) {
       target.sdlEventHandlerMouseButtonUpGlobal = function(event) {
@@ -11225,7 +11233,7 @@ var ASM_CONSTS = {
       target.addEventListener("pointerup", target.sdlEventHandlerMouseButtonUpGlobal);
     }
   },
-  1237849: $0 => {
+  1237976: $0 => {
     var SDL3 = Module["SDL3"];
     if (SDL3.makePointerEventCStruct === undefined) {
       SDL3.makePointerEventCStruct = function(left, top, event) {
@@ -11263,7 +11271,7 @@ var ASM_CONSTS = {
       };
     }
   },
-  1238841: $0 => {
+  1238968: $0 => {
     var id = UTF8ToString($0);
     try {
       var canvas = document.querySelector(id);
@@ -11273,23 +11281,23 @@ var ASM_CONSTS = {
     } catch (e) {}
     return false;
   },
-  1239007: () => document.hasFocus(),
-  1239039: () => {
+  1239134: () => document.hasFocus(),
+  1239166: () => {
     var target = document;
     if (target) {
       target.removeEventListener("pointerup", target.sdlEventHandlerMouseButtonUpGlobal);
       target.sdlEventHandlerMouseButtonUpGlobal = undefined;
     }
   },
-  1239221: () => document.body.clientWidth,
-  1239259: () => document.body.clientHeight,
-  1239298: () => window.innerWidth,
-  1239328: () => window.innerHeight,
-  1239359: () => window.outerWidth,
-  1239389: () => window.outerHeight,
-  1239420: () => window.pageXOffset,
-  1239451: () => window.pageYOffset,
-  1239482: ($0, $1) => {
+  1239348: () => document.body.clientWidth,
+  1239386: () => document.body.clientHeight,
+  1239425: () => window.innerWidth,
+  1239455: () => window.innerHeight,
+  1239486: () => window.outerWidth,
+  1239516: () => window.outerHeight,
+  1239547: () => window.pageXOffset,
+  1239578: () => window.pageYOffset,
+  1239609: ($0, $1) => {
     var target = document.querySelector(UTF8ToString($1));
     if (target) {
       var SDL3 = Module["SDL3"];
@@ -11327,7 +11335,7 @@ var ASM_CONSTS = {
       target.addEventListener("pointerup", target.sdlEventHandlerPointerGeneric);
     }
   },
-  1240870: ($0, $1, $2) => {
+  1240997: ($0, $1, $2) => {
     var target = document.querySelector(UTF8ToString($1));
     if (target) {
       var data = $0;
@@ -11407,7 +11415,7 @@ var ASM_CONSTS = {
       target.addEventListener("dragleave", SDL3.eventHandlerDropDragend);
     }
   },
-  1243237: $0 => {
+  1243364: $0 => {
     var target = document.querySelector(UTF8ToString($0));
     if (target) {
       var SDL3 = Module["SDL3"];
@@ -11435,7 +11443,7 @@ var ASM_CONSTS = {
       SDL3.eventHandlerDropDragend = undefined;
     }
   },
-  1244067: $0 => {
+  1244194: $0 => {
     var target = document.querySelector(UTF8ToString($0));
     if (target) {
       target.removeEventListener("pointerenter", target.sdlEventHandlerPointerEnter);
@@ -11450,7 +11458,7 @@ var ASM_CONSTS = {
       target.sdlEventHandlerPointerGeneric = undefined;
     }
   },
-  1244801: () => {
+  1244928: () => {
     if (!window.matchMedia) {
       return -1;
     }
@@ -11462,7 +11470,7 @@ var ASM_CONSTS = {
     }
     return -1;
   },
-  1245010: () => {
+  1245137: () => {
     if (typeof (Module["SDL3"]) !== "undefined") {
       var SDL3 = Module["SDL3"];
       SDL3.themeChangedMatchMedia.removeEventListener("change", SDL3.eventHandlerThemeChanged);
@@ -11470,14 +11478,14 @@ var ASM_CONSTS = {
       SDL3.eventHandlerThemeChanged = undefined;
     }
   },
-  1245263: () => window.innerWidth,
-  1245293: () => window.innerHeight,
-  1245324: $0 => {
+  1245390: () => window.innerWidth,
+  1245420: () => window.innerHeight,
+  1245451: $0 => {
     Module["requestFullscreen"] = function(lockPointer, resizeCanvas) {
       _requestFullscreenThroughSDL($0);
     };
   },
-  1245433: ($0, $1) => {
+  1245560: ($0, $1) => {
     var pngData = (growMemViews(), HEAPU8).buffer instanceof ArrayBuffer ? (growMemViews(), 
     HEAPU8).subarray($0 >>> 0, $0 + $1 >>> 0) : (growMemViews(), HEAPU8).slice($0, $0 + $1);
     var blob = new Blob([ pngData ], {
@@ -11496,12 +11504,12 @@ var ASM_CONSTS = {
     }
     link.href = url;
   },
-  1245926: () => {
+  1246053: () => {
     Module["requestFullscreen"] = function(lockPointer, resizeCanvas) {};
   },
-  1246e3: () => window.innerWidth,
-  1246030: () => window.innerHeight,
-  1246061: $0 => {
+  1246127: () => window.innerWidth,
+  1246157: () => window.innerHeight,
+  1246188: $0 => {
     var canvas = document.querySelector(UTF8ToString($0));
     canvas.SDL3_original_position = canvas.style.position;
     canvas.SDL3_original_top = canvas.style.top;
@@ -11522,7 +11530,7 @@ var ASM_CONSTS = {
     canvas.style.top = "0";
     canvas.style.left = "0";
   },
-  1246759: () => {
+  1246886: () => {
     var div = document.getElementById("SDL3_fill_document_background_elements");
     if (div) {
       if (div.SDL3_canvas_nextsib) {
@@ -11539,7 +11547,7 @@ var ASM_CONSTS = {
       div.remove();
     }
   },
-  1247318: () => {
+  1247445: () => {
     if (window.matchMedia) {
       var SDL3 = Module["SDL3"];
       SDL3.eventHandlerThemeChanged = function(event) {
@@ -11549,7 +11557,7 @@ var ASM_CONSTS = {
       SDL3.themeChangedMatchMedia.addEventListener("change", SDL3.eventHandlerThemeChanged);
     }
   },
-  1247640: ($0, $1, $2, $3, $4) => {
+  1247767: ($0, $1, $2, $3, $4) => {
     var title = UTF8ToString($0);
     var message = UTF8ToString($1);
     var background = UTF8ToString($2);
@@ -11569,7 +11577,7 @@ var ASM_CONSTS = {
     dialog.append(p);
     dialog.showModal();
   },
-  1248181: ($0, $1, $2, $3, $4, $5, $6, $7) => {
+  1248308: ($0, $1, $2, $3, $4, $5, $6, $7) => {
     var dialog_id = UTF8ToString($0);
     var text = UTF8ToString($1);
     var responseId = $2;
@@ -11610,7 +11618,7 @@ var ASM_CONSTS = {
     dialog.append(button);
     return true;
   },
-  1249190: $0 => {
+  1249317: $0 => {
     var dialog_id = UTF8ToString($0);
     var dialog = document.getElementById(dialog_id);
     if (!dialog) {
@@ -11618,7 +11626,7 @@ var ASM_CONSTS = {
     }
     return dialog.open;
   },
-  1249328: $0 => {
+  1249455: $0 => {
     var dialog_id = UTF8ToString($0);
     var dialog = document.getElementById(dialog_id);
     if (!dialog) {
@@ -11630,11 +11638,11 @@ var ASM_CONSTS = {
       return 0;
     }
   },
-  1249510: ($0, $1) => {
+  1249637: ($0, $1) => {
     alert(UTF8ToString($0) + "\n\n" + UTF8ToString($1));
   },
-  1249567: () => /iPhone|iPad|iPod/.test(navigator.userAgent) ? 1 : 0,
-  1249632: () => {
+  1249694: () => /iPhone|iPad|iPod/.test(navigator.userAgent) ? 1 : 0,
+  1249759: () => {
     try {
       const c = document.createElement("canvas");
       c.width = 1;
@@ -11649,7 +11657,7 @@ var ASM_CONSTS = {
       return 0;
     }
   },
-  1249894: () => /iPhone|iPad|iPod/.test(navigator.userAgent) ? 1 : 0
+  1250021: () => /iPhone|iPad|iPod/.test(navigator.userAgent) ? 1 : 0
 };
 
 function SDL_GetEmscriptenJoystickVendor(device_index) {
@@ -11686,9 +11694,11 @@ function SDL_IsEmscriptenJoystickXInput(device_index) {
 }
 
 // Imports from the Wasm binary.
-var _gxWebSendKeyState, _gxWebSendKey, _gxWebSendMouse, _main, _malloc, _free, _pthread_self, _htonl, _htons, _ntohs, _SDL_free, _SDL_malloc, _SDL_calloc, _Emscripten_force_free, _SDL_realloc, _Emscripten_HandlePointerEnter, _Emscripten_HandlePointerLeave, _Emscripten_HandlePointerGeneric, _Emscripten_HandleMouseButtonUpGlobal, _Emscripten_SendDragEvent, _Emscripten_SendDragCompleteEvent, _Emscripten_SendDragTextEvent, _Emscripten_SendDragFileEvent, _Emscripten_HandleLockKeysCheck, _Emscripten_SendSystemThemeChangedEvent, _requestFullscreenThroughSDL, __emscripten_tls_init, __emscripten_proxy_main, __emscripten_run_callback_on_thread, __emscripten_set_offscreencanvas_size_on_thread, __emscripten_thread_init, __emscripten_thread_crashed, _emscripten_proxy_execute_queue, _emscripten_proxy_finish, __emscripten_run_js_on_main_thread, __emscripten_thread_free_data, __emscripten_thread_exit, __emscripten_check_mailbox, ___trap, _emscripten_stack_set_limits, __emscripten_stack_restore, __emscripten_stack_alloc, _emscripten_stack_get_current, __wasmfs_opfs_record_entry;
+var _gxWebQuickSave, _gxWebQuickLoad, _gxWebSendKeyState, _gxWebSendKey, _gxWebSendMouse, _main, _malloc, _free, _pthread_self, _htonl, _htons, _ntohs, _SDL_free, _SDL_malloc, _SDL_calloc, _Emscripten_force_free, _SDL_realloc, _Emscripten_HandlePointerEnter, _Emscripten_HandlePointerLeave, _Emscripten_HandlePointerGeneric, _Emscripten_HandleMouseButtonUpGlobal, _Emscripten_SendDragEvent, _Emscripten_SendDragCompleteEvent, _Emscripten_SendDragTextEvent, _Emscripten_SendDragFileEvent, _Emscripten_HandleLockKeysCheck, _Emscripten_SendSystemThemeChangedEvent, _requestFullscreenThroughSDL, __emscripten_tls_init, __emscripten_proxy_main, __emscripten_run_callback_on_thread, __emscripten_set_offscreencanvas_size_on_thread, __emscripten_thread_init, __emscripten_thread_crashed, _emscripten_proxy_execute_queue, _emscripten_proxy_finish, __emscripten_run_js_on_main_thread, __emscripten_thread_free_data, __emscripten_thread_exit, __emscripten_check_mailbox, ___trap, _emscripten_stack_set_limits, __emscripten_stack_restore, __emscripten_stack_alloc, _emscripten_stack_get_current, __wasmfs_opfs_record_entry;
 
 function assignWasmExports(wasmExports) {
+  Module["_gxWebQuickSave"] = _gxWebQuickSave = wasmExports["gxWebQuickSave"];
+  Module["_gxWebQuickLoad"] = _gxWebQuickLoad = wasmExports["gxWebQuickLoad"];
   Module["_gxWebSendKeyState"] = _gxWebSendKeyState = wasmExports["gxWebSendKeyState"];
   Module["_gxWebSendKey"] = _gxWebSendKey = wasmExports["gxWebSendKey"];
   Module["_gxWebSendMouse"] = _gxWebSendMouse = wasmExports["gxWebSendMouse"];
