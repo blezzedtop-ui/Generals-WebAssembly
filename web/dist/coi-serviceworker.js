@@ -41,17 +41,18 @@ if (typeof window === 'undefined') {
     const path = (() => { try { return new URL(r.url).pathname; } catch { return ''; } })();
     if (path.endsWith('.data') || path.endsWith('.wasm')) return;
 
-    // Everything else is small (HTML, JS, the unpack worker, JSON). Add the
-    // COOP/COEP/CORP headers so the document is crossOriginIsolated AND the
-    // dedicated worker script carries its own require-corp — a worker created
-    // in a require-corp context is blocked unless its script response has COEP.
+    // iOS Safari can keep an older JS response alive even after a new deployment
+    // when the URL/query string is unchanged. For the small shell resources force
+    // a network revalidation with no-store so mobile-controls/loadscreen/game.js
+    // always come from the current production deployment.
     e.respondWith(
-      fetch(r).then((res) => {
+      fetch(r, { cache: 'no-store' }).then((res) => {
         if (res.status === 0) return res; // opaque
         const headers = new Headers(res.headers);
         headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
         headers.set('Cross-Origin-Opener-Policy', 'same-origin');
         headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+        headers.set('Cache-Control', 'no-store, max-age=0');
         return new Response(res.body, {
           status: res.status,
           statusText: res.statusText,
