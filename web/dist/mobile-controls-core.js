@@ -99,12 +99,10 @@
   function updateCameraKeys(dx,dy){
     const wanted=new Set();
     const dead=12;
-    // Map follows the finger: dragging right reveals the left side, etc.
     if(dx>dead) wanted.add('ArrowLeft');
     else if(dx<-dead) wanted.add('ArrowRight');
     if(dy>dead) wanted.add('ArrowUp');
     else if(dy<-dead) wanted.add('ArrowDown');
-
     for(const name of Array.from(cameraHeld)){
       if(!wanted.has(name)){
         setHeldKey(name,false);
@@ -240,7 +238,6 @@
       one.last=p;
       const moved=dist(p,one.start);
       if(moved>7){one.moved=true;clearLong();}
-
       if(selectArmed){
         releaseCameraKeys();
         if(!dragging && moved>9){
@@ -250,14 +247,11 @@
         }
         if(dragging) move(p,1);
       }else{
-        // IMPORTANT: normal camera drag sends NO mouse-down at all.
-        // This makes box selection impossible unless SELECT is explicitly armed.
         if(moved>9) cameraDragging=true;
         if(cameraDragging) updateCameraKeys(p.x-one.start.x,p.y-one.start.y);
       }
       return;
     }
-
     if(e.touches.length===2){
       clearLong();
       const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]);
@@ -282,7 +276,6 @@
     if(uiTarget(e.target)) return;
     claimTouch(e);
     clearLong();
-
     if(two){
       if(e.touches.length<2){
         releaseCameraKeys();
@@ -291,11 +284,9 @@
       }
       return;
     }
-
     if(!one||e.touches.length) return;
     const t=e.changedTouches?.[0],p=t?touchPoint(t):one.last;
     if(one.longPressed){resetOne();return;}
-
     if(dragging){
       move(p,1);
       mouse('mouseup',p,0,0);
