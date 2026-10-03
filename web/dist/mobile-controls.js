@@ -54,7 +54,7 @@
       if (performance.now() - started > 5000) clearInterval(argGuard);
       return;
     }
-    if (!current.__gxLowPressure540) {
+    if (!current.__gxLowPressure480) {
       const previous = current;
       const wrapped = function () {
         const args = previous();
@@ -66,7 +66,7 @@
         const dims = [screen.width || 0, screen.height || 0].filter(n => n > 0);
         const sh = Math.max(1, dims.length ? Math.min(...dims) : Math.min(vw, vh));
         const aspect = Math.max(1.33, Math.min(2.5, sw / sh));
-        let h = 540;
+        let h = 480;
         let w = Math.round(h * aspect);
         w = (Math.max(864, Math.min(1440, w)) & ~1);
         h &= ~1;
@@ -75,7 +75,7 @@
         if (!args.some(a => String(a).toLowerCase() === '-forcefullviewport')) args.push('-forcefullviewport');
         return args;
       };
-      wrapped.__gxLowPressure540 = true;
+      wrapped.__gxLowPressure480 = true;
       window.gxGameArguments = wrapped;
     }
     if (performance.now() - started > 5000) clearInterval(argGuard);
@@ -86,15 +86,41 @@
     const cv = document.getElementById('canvas');
     if (!cv || cv.__gxContextRecoveryInstalled) return false;
     cv.__gxContextRecoveryInstalled = true;
+    let restoreTimer = null;
+    const reviveCanvas = () => {
+      cv.style.setProperty('display', 'block', 'important');
+      cv.style.setProperty('visibility', 'visible', 'important');
+      cv.style.setProperty('opacity', '1', 'important');
+      cv.style.setProperty('width', '100vw', 'important');
+      cv.style.setProperty('height', '100dvh', 'important');
+      try { cv.focus({ preventScroll: true }); } catch (_) { try { cv.focus(); } catch (__) {} }
+    };
     cv.addEventListener('webglcontextlost', e => {
       e.preventDefault();
       cv.dataset.gxContextLost = '1';
-      console.warn('[iphone-stability] WebGL context lost; waiting for restore');
+      reviveCanvas();
+      console.warn('[iphone-stability] WebGL context lost; requesting restore');
+      if (restoreTimer) clearTimeout(restoreTimer);
+      restoreTimer = setTimeout(() => {
+        restoreTimer = null;
+        try {
+          const gl = cv.getContext('webgl2') || cv.getContext('webgl') || cv.getContext('experimental-webgl');
+          gl?.getExtension('WEBGL_lose_context')?.restoreContext();
+        } catch (_) {}
+        reviveCanvas();
+      }, 120);
     }, false);
     cv.addEventListener('webglcontextrestored', () => {
+      if (restoreTimer) clearTimeout(restoreTimer);
+      restoreTimer = null;
       delete cv.dataset.gxContextLost;
-      try { cv.focus({ preventScroll: true }); } catch (_) { try { cv.focus(); } catch (__) {} }
+      reviveCanvas();
+      console.log('[iphone-stability] WebGL context restored');
     }, false);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) reviveCanvas();
+    });
+    window.addEventListener('pageshow', reviveCanvas);
     return true;
   }
   if (!attachContextRecovery()) {
