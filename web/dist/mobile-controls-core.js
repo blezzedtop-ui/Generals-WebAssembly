@@ -86,9 +86,9 @@
   let cameraKeyUpTimer=null;
   let cameraLastMotion=0;
   const CAMERA_DEAD_PX=1.0;
-  const CAMERA_PULSE_ON_MS=62;
-  const CAMERA_PULSE_GAP_MS=22;
-  const CAMERA_IDLE_GRACE_MS=220;
+  const CAMERA_PULSE_ON_MS=48;
+  const CAMERA_PULSE_GAP_MS=34;
+  const CAMERA_IDLE_GRACE_MS=180;
 
   function setHeldKey(name,down){
     const cv=focusCanvas(); if(!cv) return;
@@ -276,7 +276,7 @@
       document.getElementById('gx-m-select')?.classList.remove('gx-active');
       one=null;dragging=false;cameraDragging=true;
       const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]);
-      two={startMid:midpoint(a,b),mid:midpoint(a,b),dist:dist(a,b),moved:false};
+      two={startMid:midpoint(a,b),mid:midpoint(a,b),dist:dist(a,b),zoomCarry:0,moved:false};
     }
   }
 
@@ -307,12 +307,15 @@
       clearLong();
       const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]);
       const m=midpoint(a,b),d=dist(a,b);
-      if(!two) two={startMid:m,mid:m,dist:d,moved:false};
+      if(!two) two={startMid:m,mid:m,dist:d,zoomCarry:0,moved:false};
       const pinch=d-two.dist;
-      if(Math.abs(pinch)>=7){
+      two.dist=d;
+      two.zoomCarry=(two.zoomCarry||0)+pinch;
+      if(Math.abs(two.zoomCarry)>=2.2){
         const cv=canvas(),r=cv.getBoundingClientRect();
-        wheel({x:r.left+r.width/2,y:r.top+r.height/2},pinch>0?-100:100);
-        two.dist=d;
+        const step=Math.max(-28,Math.min(28,-two.zoomCarry*5.5));
+        wheel({x:r.left+r.width/2,y:r.top+r.height/2},step);
+        two.zoomCarry*=0.35;
         two.moved=true;
       }
       const dx=m.x-two.startMid.x,dy=m.y-two.startMid.y;
@@ -421,9 +424,8 @@
       box.querySelector('[data-load]')?.addEventListener('pointerdown',e=>{
         e.preventDefault();e.stopPropagation();key('F10','F10');
       });
-      box.querySelector('[data-close]')?.addEventListener('pointerdown',e=>{
-        e.preventDefault();e.stopPropagation();sendEscape();
-      });
+      // X is a mobile cancel control, not ESC. Its behavior is handled
+      // by mobile-controls.js so it can never open/close the in-game ESC menu.
     }
   }
 
