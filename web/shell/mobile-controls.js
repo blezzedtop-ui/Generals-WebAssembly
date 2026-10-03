@@ -1,5 +1,5 @@
 'use strict';
-// iPhone stability + touch-direction guard.
+// iPhone stability + smooth touch-direction guard.
 (function () {
   const touchDevice = navigator.maxTouchPoints > 0;
 
@@ -107,12 +107,12 @@
   const LEFT  = 1073741904;
   const DOWN  = 1073741905;
   const UP    = 1073741906;
+  const ESC   = 27;
   const arrowCodes = new Set([RIGHT, LEFT, DOWN, UP]);
 
-  // Drive camera arrows from a filtered touch vector. The legacy core still
-  // detects gestures/select/pinch, but its 62ms/22ms arrow pulses are ignored
-  // while a touch-pan is active. This removes stop/start stutter and prevents
-  // 1px coordinate noise from briefly steering in the opposite direction.
+  // Smooth map-grab pan. Finger motion is low-pass filtered and translated to
+  // a short PWM key duty cycle. Slow finger movement pans slowly; faster swipes
+  // ramp toward normal camera speed without sudden full-speed jumps.
   const isUiTarget = t => !!(t && t.closest &&
     (t.closest('#gx-mobile-controls') || t.closest('#gx-overlay') || t.closest('#gx-mp')));
   const selectionActive = () => !!document.querySelector('#gx-m-select.gx-active');
@@ -132,34 +132,68 @@
   let desired = new Set();
   const held = new Set();
   let idleRelease = null;
+  let pwmFrame = 0;
+  let panStrength = 0;
+  const PWM_PERIOD_MS = 72;
+  const emptySet = new Set();
 
   function clearIdleRelease() {
     if (idleRelease !== null) clearTimeout(idleRelease);
     idleRelease = null;
   }
-  function applyDesired() {
+
+  function setHeld(target) {
     if (!nativeSend) return;
     for (const code of Array.from(held)) {
-      if (!desired.has(code)) {
+      if (!target.has(code)) {
         nativeSend(code, 0);
         held.delete(code);
       }
     }
-    for (const code of desired) {
+    for (const code of target) {
       if (!held.has(code)) {
         nativeSend(code, 1);
         held.add(code);
       }
     }
   }
+
+  function stopPwm() {
+    if (pwmFrame) cancelAnimationFrame(pwmFrame);
+    pwmFrame = 0;
+  }
+
+  function pwmStep(now) {
+    pwmFrame = 0;
+    if (!panTouchActive || !desired.size || !nativeSend || panStrength <= 0) {
+      setHeld(emptySet);
+      return;
+    }
+    // 45% duty at tiny drags, easing to a continuous hold at normal swipe speed.
+    const duty = Math.min(1, 0.45 + panStrength * 0.55);
+    const phase = (now % PWM_PERIOD_MS) / PWM_PERIOD_MS;
+    setHeld(phase < duty ? desired : emptySet);
+    pwmFrame = requestAnimationFrame(pwmStep);
+  }
+
+  function applyDesired() {
+    if (!nativeSend) return;
+    if (!desired.size || panStrength <= 0) {
+      stopPwm();
+      setHeld(emptySet);
+      return;
+    }
+    if (!pwmFrame) pwmFrame = requestAnimationFrame(pwmStep);
+  }
+
   function releaseAllArrows() {
     clearIdleRelease();
+    stopPwm();
     desired = new Set();
-    if (nativeSend) {
-      for (const code of Array.from(held)) nativeSend(code, 0);
-    }
-    held.clear();
+    panStrength = 0;
+    setHeld(emptySet);
   }
+
   function resetPan(keepTouch = false) {
     releaseAllArrows();
     if (!keepTouch) panTouchActive = false;
@@ -167,35 +201,43 @@
     filtX = 0;
     filtY = 0;
   }
+
   function updateIntent(dx, dy) {
-    // Clamp occasional Safari coordinate jumps and low-pass normal finger jitter.
-    dx = Math.max(-24, Math.min(24, dx));
-    dy = Math.max(-24, Math.min(24, dy));
-    filtX = filtX * 0.58 + dx;
-    filtY = filtY * 0.58 + dy;
+    // Clamp Safari coordinate jumps, then use a normalized low-pass filter.
+    dx = Math.max(-22, Math.min(22, dx));
+    dy = Math.max(-22, Math.min(22, dy));
+    filtX = filtX * 0.72 + dx * 0.28;
+    filtY = filtY * 0.72 + dy * 0.28;
 
     const ax = Math.abs(filtX);
     const ay = Math.abs(filtY);
-    const DEAD = 1.9;
-    const SECONDARY = 0.68;
+    const speed = Math.hypot(filtX, filtY);
+    const DEAD = 0.72;
+    const SECONDARY = 0.58;
     const next = new Set();
 
-    // Map-grab semantics: finger right => camera left; finger down => camera up.
+    // Map-grab semantics: finger right => map follows finger, camera moves left.
     if (ax >= DEAD && (ay < DEAD || ax >= ay * SECONDARY)) next.add(filtX > 0 ? LEFT : RIGHT);
     if (ay >= DEAD && (ax < DEAD || ay >= ax * SECONDARY)) next.add(filtY > 0 ? UP : DOWN);
 
     desired = next;
+    // Ease camera speed according to finger speed instead of jumping to 100%.
+    panStrength = next.size ? Math.max(0.10, Math.min(1, (speed - DEAD) / 5.8)) : 0;
     applyDesired();
 
     clearIdleRelease();
-    // If WebKit drops touchmove events briefly, keep motion alive long enough to
-    // bridge the gap, but stop promptly once the finger actually stops moving.
+    // Bridge small WebKit touchmove gaps, then decay smoothly and stop.
     idleRelease = setTimeout(() => {
-      desired = new Set();
-      applyDesired();
       filtX *= 0.35;
       filtY *= 0.35;
-    }, 135);
+      panStrength *= 0.35;
+      applyDesired();
+      idleRelease = setTimeout(() => {
+        desired = new Set();
+        panStrength = 0;
+        applyDesired();
+      }, 55);
+    }, 105);
   }
 
   document.addEventListener('touchstart', e => {
@@ -205,6 +247,7 @@
     filtX = 0;
     filtY = 0;
     desired = new Set();
+    panStrength = 0;
     releaseAllArrows();
   }, { passive: true, capture: true });
 
@@ -224,7 +267,7 @@
     const dx = p.x - lastPoint.x;
     const dy = p.y - lastPoint.y;
     lastPoint = p;
-    if (Math.hypot(dx, dy) < 0.35) return;
+    if (Math.hypot(dx, dy) < 0.18) return;
     updateIntent(dx, dy);
   }, { passive: true, capture: true });
 
@@ -235,6 +278,7 @@
       filtX = 0;
       filtY = 0;
       desired = new Set();
+      panStrength = 0;
       applyDesired();
     } else {
       resetPan(false);
@@ -258,9 +302,7 @@
 
     const wrapped = function (code, down) {
       if (!arrowCodes.has(code)) return nativeSend(code, down);
-      // During an active touch gesture our filtered vector is the single source
-      // of truth. Ignore the old pulse generator so it cannot inject stale or
-      // opposite arrows. Outside touch-pan, preserve normal native behavior.
+      // During touch-pan, filtered PWM motion is the only camera input source.
       if (panTouchActive) return;
       return nativeSend(code, down);
     };
@@ -268,11 +310,82 @@
     wrapped.__gxOriginal = current;
     m._gxWebSendKeyState = wrapped;
     applyDesired();
-    console.log('[touch-filter] direct filtered camera pan enabled');
+    console.log('[touch-filter] smooth variable-speed camera pan enabled');
     return true;
   }
   const bridgeTimer = setInterval(installTouchIntentBridge, 50);
   setTimeout(() => { if (installTouchIntentBridge()) clearInterval(bridgeTimer); }, 12000);
+
+  function pulseEscape() {
+    const m = window.Module;
+    try {
+      if (m?._gxWebSendKeyState) {
+        m._gxWebSendKeyState(ESC, 1);
+        setTimeout(() => { try { window.Module?._gxWebSendKeyState?.(ESC, 0); } catch (_) {} }, 90);
+        return;
+      }
+      if (m?._gxWebSendKey) {
+        m._gxWebSendKey(ESC);
+        return;
+      }
+    } catch (_) {}
+    const cv = document.getElementById('canvas');
+    if (!cv) return;
+    const opts = { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true, composed: true };
+    cv.dispatchEvent(new KeyboardEvent('keydown', opts));
+    setTimeout(() => cv.dispatchEvent(new KeyboardEvent('keyup', opts)), 90);
+  }
+
+  function installCancelButton() {
+    const btn = document.getElementById('gx-m-close');
+    if (!btn || btn.__gxCancelPolished) return !!btn;
+    btn.__gxCancelPolished = true;
+    btn.setAttribute('aria-label', 'Cancel current selection or command');
+    btn.setAttribute('title', 'Cancel');
+    btn.style.left = 'auto';
+    btn.style.top = 'auto';
+    btn.style.right = '84px';
+    btn.style.bottom = '92px';
+    btn.style.width = '52px';
+    btn.style.height = '46px';
+    btn.style.borderRadius = '10px';
+    btn.style.background = 'rgba(145,35,35,.78)';
+    btn.style.borderColor = 'rgba(255,170,170,.85)';
+    btn.style.fontSize = '22px';
+    return true;
+  }
+
+  // Handle X in capture phase so it is one deterministic cancel action rather
+  // than double-firing the legacy close handler.
+  document.addEventListener('pointerdown', e => {
+    const btn = e.target?.closest?.('#gx-m-close,[data-close]');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    resetPan(false);
+
+    // If box SELECT is armed, toggle it off through its own handler so the
+    // legacy core's internal selectArmed state stays in sync with the UI.
+    const selectBtn = document.getElementById('gx-m-select');
+    if (selectBtn?.classList.contains('gx-active')) {
+      try {
+        selectBtn.dispatchEvent(new PointerEvent('pointerdown', {
+          bubbles: true, cancelable: true, pointerType: 'touch'
+        }));
+      } catch (_) {
+        selectBtn.classList.remove('gx-active');
+      }
+    }
+    pulseEscape();
+    try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+  }, { capture: true, passive: false });
+
+  if (!installCancelButton()) {
+    const cancelTimer = setInterval(() => {
+      if (installCancelButton()) clearInterval(cancelTimer);
+    }, 100);
+    setTimeout(() => clearInterval(cancelTimer), 10000);
+  }
 
   loadBase();
 })();
