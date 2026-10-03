@@ -1,22 +1,58 @@
 'use strict';
-// Touch-screen stability guard. Gameplay input itself lives in
-// mobile-controls-core.js. This wrapper only prevents browser viewport churn
-// from interfering with an active touch gesture.
+// Mobile touch isolation + viewport stability wrapper.
+// Physical finger input lands on #gx-touch-surface instead of the SDL canvas;
+// gameplay input is then forwarded only by mobile-controls-core.js.
 (function () {
   if (window.__gxTouchScreenGuardInstalled) return;
   window.__gxTouchScreenGuardInstalled = true;
 
   let activeTouches = 0;
   let pendingViewportSync = null;
-  let pendingCanvasResize = null;
   const vv = window.visualViewport;
 
   const isUiTarget = t => !!(t && t.closest &&
     (t.closest('#gx-mobile-controls') || t.closest('#gx-overlay') || t.closest('#gx-mp')));
 
-  function lockPageGestures() {
+  function installTouchSurface() {
     const cv = document.getElementById('canvas');
-    for (const el of [document.documentElement, document.body, cv]) {
+    if (!cv || !document.body) return null;
+
+    let surface = document.getElementById('gx-touch-surface');
+    if (!surface) {
+      surface = document.createElement('div');
+      surface.id = 'gx-touch-surface';
+      surface.setAttribute('aria-hidden', 'true');
+      surface.style.cssText = [
+        'position:fixed','inset:0','z-index:8','background:transparent',
+        'pointer-events:auto','touch-action:none','overscroll-behavior:none',
+        '-webkit-user-select:none','-webkit-touch-callout:none'
+      ].join(';');
+      document.body.appendChild(surface);
+    }
+
+    // The browser/SDL backend must never receive the physical finger directly.
+    // Programmatic Module._gxWebSendMouse/_gxWebSendKeyState input is unaffected.
+    cv.style.setProperty('pointer-events', 'none', 'important');
+    cv.style.setProperty('touch-action', 'none', 'important');
+
+    // Fullscreen the whole document, not only the canvas. Otherwise the touch
+    // surface and mobile controls disappear when the canvas becomes fullscreen.
+    try {
+      if (document.documentElement.requestFullscreen && cv.requestFullscreen && !cv.__gxRootFsRedirect) {
+        cv.__gxRootFsRedirect = true;
+        cv.requestFullscreen = opts => document.documentElement.requestFullscreen(opts);
+      }
+      if (document.documentElement.webkitRequestFullscreen && cv.webkitRequestFullscreen && !cv.__gxRootWebkitFsRedirect) {
+        cv.__gxRootWebkitFsRedirect = true;
+        cv.webkitRequestFullscreen = () => document.documentElement.webkitRequestFullscreen();
+      }
+    } catch {}
+    return surface;
+  }
+
+  function lockPageGestures() {
+    installTouchSurface();
+    for (const el of [document.documentElement, document.body]) {
       if (!el) continue;
       el.style.setProperty('touch-action', 'none', 'important');
       el.style.setProperty('overscroll-behavior', 'none', 'important');
@@ -36,12 +72,7 @@
     pendingViewportSync = null;
     requestAnimationFrame(() => {
       if (activeTouches !== 0) return;
-      if (sync) {
-        pendingCanvasResize = null;
-        try { sync(); } catch {}
-      } else if (window.Module?.__gxFlushTouchCanvasResize) {
-        try { Module.__gxFlushTouchCanvasResize(); } catch {}
-      }
+      if (sync) { try { sync(); } catch {} }
       try { scrollTo(0, 0); } catch {}
     });
   }
@@ -49,81 +80,57 @@
   document.addEventListener('touchstart', e => {
     updateTouchCount(e);
     lockPageGestures();
-  }, { passive: true, capture: true });
+    if (!isUiTarget(e.target) && e.cancelable) e.preventDefault();
+  }, { passive:false, capture:true });
 
   document.addEventListener('touchmove', e => {
     updateTouchCount(e);
     if (!isUiTarget(e.target) && e.cancelable) e.preventDefault();
-  }, { passive: false, capture: true });
+  }, { passive:false, capture:true });
 
   document.addEventListener('touchend', e => {
     updateTouchCount(e);
+    if (!isUiTarget(e.target) && e.cancelable) e.preventDefault();
     flushAfterGesture();
-  }, { passive: true, capture: true });
+  }, { passive:false, capture:true });
 
   document.addEventListener('touchcancel', e => {
     updateTouchCount(e);
+    if (!isUiTarget(e.target) && e.cancelable) e.preventDefault();
     flushAfterGesture();
-  }, { passive: true, capture: true });
+  }, { passive:false, capture:true });
 
   const nativeWindowAdd = window.addEventListener;
   const nativeVvAdd = vv && vv.addEventListener;
-
   function guardedViewportListener(listener) {
-    return function (event) {
-      if (activeTouches > 0) {
-        pendingViewportSync = listener;
-        return;
-      }
+    return function(event) {
+      if (activeTouches > 0) { pendingViewportSync = listener; return; }
       return listener.call(this, event);
     };
   }
 
-  window.addEventListener = function (type, listener, options) {
-    if (type === 'resize' && listener && listener.name === 'syncViewport') {
+  window.addEventListener = function(type, listener, options) {
+    if (type === 'resize' && listener && listener.name === 'syncViewport')
       return nativeWindowAdd.call(window, type, guardedViewportListener(listener), options);
-    }
     return nativeWindowAdd.call(window, type, listener, options);
   };
-
   if (vv && nativeVvAdd) {
-    vv.addEventListener = function (type, listener, options) {
-      if ((type === 'resize' || type === 'scroll') && listener && listener.name === 'syncViewport') {
+    vv.addEventListener = function(type, listener, options) {
+      if ((type === 'resize' || type === 'scroll') && listener && listener.name === 'syncViewport')
         return nativeVvAdd.call(vv, type, guardedViewportListener(listener), options);
-      }
       return nativeVvAdd.call(vv, type, listener, options);
     };
   }
 
-  const wrapTimer = setInterval(() => {
-    const mod = window.Module;
-    if (!mod || typeof mod.setCanvasSize !== 'function' || mod.__gxTouchCanvasResizeGuard) return;
-    const nativeSetCanvasSize = mod.setCanvasSize.bind(mod);
-    mod.__gxTouchCanvasResizeGuard = true;
-    mod.setCanvasSize = function (w, h, noUpdates) {
-      if (activeTouches > 0) {
-        pendingCanvasResize = [w, h, noUpdates];
-        return;
-      }
-      return nativeSetCanvasSize(w, h, noUpdates);
-    };
-    mod.__gxFlushTouchCanvasResize = function () {
-      if (!pendingCanvasResize || activeTouches > 0) return;
-      const args = pendingCanvasResize;
-      pendingCanvasResize = null;
-      return nativeSetCanvasSize(args[0], args[1], args[2]);
-    };
-    clearInterval(wrapTimer);
-  }, 50);
-
-  window.__gxMobileGuardCoreLoaded = function () {
+  window.__gxMobileGuardCoreLoaded = function() {
     window.addEventListener = nativeWindowAdd;
     if (vv && nativeVvAdd) vv.addEventListener = nativeVvAdd;
     lockPageGestures();
     delete window.__gxMobileGuardCoreLoaded;
   };
 
-  const src = 'mobile-controls-core.js?v=36';
+  lockPageGestures();
+  const src = 'mobile-controls-core.js?v=37';
   if (document.readyState === 'loading') {
     document.write('<script src="' + src + '" onload="window.__gxMobileGuardCoreLoaded&&window.__gxMobileGuardCoreLoaded()"><\/script>');
   } else {
