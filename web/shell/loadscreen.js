@@ -2,15 +2,10 @@
 //
 // During map load the game pthread is blocked and OffscreenCanvas frames are
 // never composited (browsers only push them when the worker yields). The
-// engine-side pump (LoadScreen.cpp, gxWebPumpLoadFrame) glReadPixels() the
-// just-rendered ORIGINAL load-screen frame — non-destructively, the game
-// canvas is never touched — and hands the RGBA pixels here via
-// MAIN_THREAD_EM_ASM. We paint them onto a fullscreen overlay canvas, so the
-// player sees the real load screen (background art, portraits, per-player
-// progress bars) exactly as the engine rendered it.
-//
-// GL rows are bottom-up; the overlay flips via ctx.scale(1,-1) so the frame
-// lands upright without a CPU flip pass.
+// engine-side pump (LoadScreen.cpp, gxWebPumpLoadFrame) hands the rendered
+// RGBA frame to the main thread. The current WebGL path already presents the
+// frame in top-down display order, so applying a second Y flip here makes the
+// whole loading screen appear upside down.
 //
 // GeneralsX @build web-port loadscreen 09/07/2026
 
@@ -39,7 +34,7 @@ const gxLoadScreen = {
     this.canvas.style.display = 'block';
   },
 
-  // px: Uint8Array RGBA, bottom-up (GL readback). w/h in pixels.
+  // px: Uint8Array RGBA already in display orientation for the current WebGL path.
   frameRGBA(px, w, h) {
     if (!this.active) return;
     this._ensure();
@@ -48,14 +43,9 @@ const gxLoadScreen = {
       this.canvas.height = h;
     }
     const img = new ImageData(new Uint8ClampedArray(px.buffer, px.byteOffset, w * h * 4), w, h);
-    // putImageData ignores transforms — draw via an ImageBitmap-less flip:
-    // put the (upside-down) frame, then flip it in place with drawImage.
+    // Do not flip vertically here. The renderer/readback path already supplies
+    // the frame in the orientation expected by the 2D canvas.
     this.ctx.putImageData(img, 0, 0);
-    this.ctx.save();
-    this.ctx.globalCompositeOperation = 'copy';
-    this.ctx.scale(1, -1);
-    this.ctx.drawImage(this.canvas, 0, -h);
-    this.ctx.restore();
   },
 
   end() {
