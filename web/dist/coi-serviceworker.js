@@ -32,6 +32,8 @@ if (typeof window === 'undefined') {
   });
 } else {
   (() => {
+    // PWA metadata is installed at runtime too, so existing index.html builds
+    // immediately become installable as a full-screen iPhone web app.
     const head = document.head || document.documentElement;
     if (!document.querySelector('link[rel="manifest"]')) {
       const link = document.createElement('link');
