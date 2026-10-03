@@ -1,6 +1,6 @@
 'use strict';
 // iPhone-first touch bridge for the Emscripten/SDL canvas.
-// One finger: tap/click, SELECT-only box drag, long press/right-click.
+// One finger: tap/click, drag camera, SELECT-only box drag, long press/right-click.
 // Two fingers: right-drag camera pan; pinch: zoom; two-finger tap: right-click.
 (function () {
   const isiPhone = /iPhone|iPod/.test(navigator.userAgent) ||
@@ -165,13 +165,15 @@
     cv.addEventListener('contextmenu',e=>e.preventDefault());
   }
 
-  let one=null, dragging=false, longTimer=null, two=null, lastTap={t:0,p:null}, selectArmed=false;
+  let one=null, dragging=false, cameraDragging=false, longTimer=null, two=null, lastTap={t:0,p:null}, selectArmed=false;
   let landscapeFullscreenTried=false;
   const clearLong=()=>{ if(longTimer) clearTimeout(longTimer); longTimer=null; };
-  function resetOne(){ clearLong(); one=null; dragging=false; }
+  function resetOne(){ clearLong(); one=null; dragging=false; cameraDragging=false; }
   function claimTouch(e){
     if(e.cancelable) e.preventDefault();
-    e.stopPropagation();
+    // Core owns gameplay touch input. stopImmediatePropagation also blocks SDL's
+    // later raw touch listener from creating an unwanted left-button box select.
+    e.stopImmediatePropagation();
   }
   function beginTwoFingerPan(a,b){
     const m=midpoint(a,b);
@@ -200,20 +202,21 @@
     claimTouch(e);
     if(e.touches.length===1){
       const p=touchPoint(e.touches[0]);
-      one={start:p,last:p,longPressed:false,moved:false}; dragging=false; two=null; move(p,0);
+      one={start:p,last:p,longPressed:false,moved:false}; dragging=false; cameraDragging=false; two=null; move(p,0);
       clearLong();
       longTimer=setTimeout(()=>{
-        if(!one||dragging||one.moved) return;
+        if(!one||dragging||cameraDragging||one.moved) return;
         click(one.last,2); one.longPressed=true;
         if(navigator.vibrate) navigator.vibrate(18);
       },520);
     } else if(e.touches.length===2){
       clearLong();
-      // Never leave a SELECT mouse-down held when a second finger starts camera pan.
+      // Never leave a one-finger mouse button held when a second finger starts camera pan.
       if(dragging && one) mouse('mouseup',one.last,0,0);
+      if(cameraDragging && one) mouse('mouseup',one.last,2,0);
       selectArmed=false;
       document.getElementById('gx-m-select')?.classList.remove('gx-active');
-      one=null; dragging=false;
+      one=null; dragging=false; cameraDragging=false;
       const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]);
       beginTwoFingerPan(a,b);
     }
@@ -227,13 +230,26 @@
       one.last=p;
       const moved=dist(p,one.start);
       if(moved>7){ one.moved=true; clearLong(); }
-      if(selectArmed && !dragging && moved>9){
-        dragging=true;
-        move(one.start,0);
-        mouse('mousedown',one.start,0,1);
+
+      if(selectArmed){
+        if(!dragging && moved>9){
+          dragging=true;
+          move(one.start,0);
+          mouse('mousedown',one.start,0,1);
+        }
+        if(dragging) move(p,1);
+      } else {
+        // Normal one-finger drag grabs the map with RMB. This keeps ordinary
+        // navigation separate from box selection, which is allowed only while
+        // the explicit SELECT button is armed.
+        if(!cameraDragging && moved>9){
+          cameraDragging=true;
+          move(one.start,0);
+          mouse('mousedown',one.start,2,2);
+        }
+        if(cameraDragging) move(p,2);
+        else if(one.moved) move(p,0);
       }
-      if(dragging) move(p,1);
-      else if(one.moved) move(p,0);
       return;
     }
     if(e.touches.length===2){
@@ -277,6 +293,9 @@
       mouse('mouseup',p,0,0);
       selectArmed=false;
       document.getElementById('gx-m-select')?.classList.remove('gx-active');
+    } else if(cameraDragging){
+      move(p,2);
+      mouse('mouseup',p,2,0);
     } else if(!one.moved) {
       const now=performance.now();
       click(p,0);
@@ -294,8 +313,9 @@
     claimTouch(e);
     clearLong();
     if(dragging && one) mouse('mouseup',one.last,0,0);
+    if(cameraDragging && one) mouse('mouseup',one.last,2,0);
     endTwoFingerPan();
-    one=null; dragging=false;
+    one=null; dragging=false; cameraDragging=false;
   }
 
   function bind(){
