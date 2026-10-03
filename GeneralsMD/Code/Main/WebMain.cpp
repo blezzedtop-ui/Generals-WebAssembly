@@ -111,6 +111,19 @@ extern "C" EMSCRIPTEN_KEEPALIVE void gxWebSendKeyState(int keycode, int isDown)
 	e.key.down = down;
 	e.key.repeat = false;
 	e.key.key = (SDL_Keycode)keycode;
+	// GeneralsX @bugfix Codex 03/10/2026 SDL3Keyboard consumes scancodes, not keycodes.
+	// Map the web controls explicitly: keyboard-layout APIs are not thread safe
+	// and the web engine runs on a separate pthread.
+	switch (e.key.key) {
+		case SDLK_ESCAPE: e.key.scancode = SDL_SCANCODE_ESCAPE; break;
+		case SDLK_LEFT: e.key.scancode = SDL_SCANCODE_LEFT; break;
+		case SDLK_RIGHT: e.key.scancode = SDL_SCANCODE_RIGHT; break;
+		case SDLK_UP: e.key.scancode = SDL_SCANCODE_UP; break;
+		case SDLK_DOWN: e.key.scancode = SDL_SCANCODE_DOWN; break;
+		case SDLK_F5: e.key.scancode = SDL_SCANCODE_F5; break;
+		case SDLK_F10: e.key.scancode = SDL_SCANCODE_F10; break;
+		default: return;
+	}
 	SDL_PushEvent(&e);
 }
 
