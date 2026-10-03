@@ -81,6 +81,15 @@
   }
 
   const cameraHeld=new Set();
+  let cameraWanted=new Set();
+  let cameraPulseTimer=null;
+  let cameraKeyUpTimer=null;
+  let cameraLastMotion=0;
+  const CAMERA_DEAD_PX=1.0;
+  const CAMERA_PULSE_ON_MS=62;
+  const CAMERA_PULSE_GAP_MS=22;
+  const CAMERA_IDLE_GRACE_MS=220;
+
   function setHeldKey(name,down){
     const cv=focusCanvas(); if(!cv) return;
     const nativeKey=sdlKeys[name];
@@ -92,35 +101,62 @@
       key:name,code:name,bubbles:true,cancelable:true,composed:true
     }));
   }
-  let cameraStopTimer=null;
-  function releaseCameraKeys(){
-    if(cameraStopTimer!==null) clearTimeout(cameraStopTimer);
-    cameraStopTimer=null;
+  function releaseHeldCameraKeys(){
     for(const name of Array.from(cameraHeld)) setHeldKey(name,false);
     cameraHeld.clear();
   }
+  function stopCameraPulse(){
+    if(cameraPulseTimer!==null) clearTimeout(cameraPulseTimer);
+    if(cameraKeyUpTimer!==null) clearTimeout(cameraKeyUpTimer);
+    cameraPulseTimer=null;
+    cameraKeyUpTimer=null;
+    releaseHeldCameraKeys();
+  }
+  function releaseCameraKeys(){
+    stopCameraPulse();
+    cameraWanted.clear();
+    cameraLastMotion=0;
+  }
+  const sameCameraKeys=(a,b)=>a.size===b.size && Array.from(a).every(k=>b.has(k));
+  function cameraPulseStep(){
+    cameraPulseTimer=null;
+    if(!cameraWanted.size || performance.now()-cameraLastMotion>CAMERA_IDLE_GRACE_MS){
+      releaseCameraKeys();
+      return;
+    }
+    releaseHeldCameraKeys();
+    for(const name of cameraWanted){
+      setHeldKey(name,true);
+      cameraHeld.add(name);
+    }
+    cameraKeyUpTimer=setTimeout(()=>{
+      cameraKeyUpTimer=null;
+      releaseHeldCameraKeys();
+      if(cameraWanted.size && performance.now()-cameraLastMotion<=CAMERA_IDLE_GRACE_MS){
+        cameraPulseTimer=setTimeout(cameraPulseStep,CAMERA_PULSE_GAP_MS);
+      }else{
+        releaseCameraKeys();
+      }
+    },CAMERA_PULSE_ON_MS);
+  }
   function updateCameraKeys(dx,dy){
     const wanted=new Set();
-    const dead=0.5;
-    if(dx>dead) wanted.add('ArrowLeft');
-    else if(dx<-dead) wanted.add('ArrowRight');
-    if(dy>dead) wanted.add('ArrowUp');
-    else if(dy<-dead) wanted.add('ArrowDown');
-    for(const name of Array.from(cameraHeld)){
-      if(!wanted.has(name)){
-        setHeldKey(name,false);
-        cameraHeld.delete(name);
-      }
+    if(dx>CAMERA_DEAD_PX) wanted.add('ArrowLeft');
+    else if(dx<-CAMERA_DEAD_PX) wanted.add('ArrowRight');
+    if(dy>CAMERA_DEAD_PX) wanted.add('ArrowUp');
+    else if(dy<-CAMERA_DEAD_PX) wanted.add('ArrowDown');
+    if(!wanted.size){
+      releaseCameraKeys();
+      return;
     }
-    for(const name of wanted){
-      if(!cameraHeld.has(name)){
-        setHeldKey(name,true);
-        cameraHeld.add(name);
-      }
-    }
+    const changed=!sameCameraKeys(cameraWanted,wanted);
+    cameraWanted=wanted;
+    cameraLastMotion=performance.now();
+    if(changed) stopCameraPulse();
+    if(cameraPulseTimer===null && cameraKeyUpTimer===null) cameraPulseStep();
   }
 
-  // GeneralsX @bugfix Codex 03/10/2026 Pan from the latest touch motion, not a held RMB or fixed origin.
+  // Stable iPhone pan: short repeated key pulses avoid touchmove stalls and run ~25% slower than a held arrow key.
   function panCamera(previous,current){
     const cv=canvas();
     if(!cv) return;
@@ -128,8 +164,6 @@
     // Keep the engine cursor away from edge-scroll zones during camera gestures.
     move({x:r.left+r.width/2,y:r.top+r.height/2},0);
     updateCameraKeys(current.x-previous.x,current.y-previous.y);
-    if(cameraStopTimer!==null) clearTimeout(cameraStopTimer);
-    cameraStopTimer=setTimeout(releaseCameraKeys,80);
   }
 
   function sendEscape(){ key('Escape','Escape'); }
