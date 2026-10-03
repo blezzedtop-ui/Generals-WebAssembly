@@ -2,10 +2,11 @@
 //
 // During map load the game pthread is blocked and OffscreenCanvas frames are
 // never composited (browsers only push them when the worker yields). The
-// engine-side pump (LoadScreen.cpp, gxWebPumpLoadFrame) hands the rendered
-// RGBA frame to the main thread. The current WebGL path already presents the
-// frame in top-down display order, so applying a second Y flip here makes the
-// whole loading screen appear upside down.
+// engine-side pump (LoadScreen.cpp, gxWebPumpLoadFrame) glReadPixels() the
+// rendered frame and hands the raw RGBA pixels to the main thread.
+//
+// WebGL glReadPixels() rows are bottom-up. ImageData/2D canvas expects the
+// first row at the top, so the frame must be flipped exactly once here.
 //
 // GeneralsX @build web-port loadscreen 09/07/2026
 
@@ -34,7 +35,7 @@ const gxLoadScreen = {
     this.canvas.style.display = 'block';
   },
 
-  // px: Uint8Array RGBA already in display orientation for the current WebGL path.
+  // px: raw Uint8Array RGBA from glReadPixels(), whose rows are bottom-up.
   frameRGBA(px, w, h) {
     if (!this.active) return;
     this._ensure();
@@ -43,9 +44,12 @@ const gxLoadScreen = {
       this.canvas.height = h;
     }
     const img = new ImageData(new Uint8ClampedArray(px.buffer, px.byteOffset, w * h * 4), w, h);
-    // Do not flip vertically here. The renderer/readback path already supplies
-    // the frame in the orientation expected by the 2D canvas.
     this.ctx.putImageData(img, 0, 0);
+    this.ctx.save();
+    this.ctx.globalCompositeOperation = 'copy';
+    this.ctx.scale(1, -1);
+    this.ctx.drawImage(this.canvas, 0, -h);
+    this.ctx.restore();
   },
 
   end() {
