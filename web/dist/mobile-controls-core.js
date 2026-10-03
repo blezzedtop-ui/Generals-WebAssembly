@@ -92,13 +92,16 @@
       key:name,code:name,bubbles:true,cancelable:true,composed:true
     }));
   }
+  let cameraStopTimer=null;
   function releaseCameraKeys(){
+    if(cameraStopTimer!==null) clearTimeout(cameraStopTimer);
+    cameraStopTimer=null;
     for(const name of Array.from(cameraHeld)) setHeldKey(name,false);
     cameraHeld.clear();
   }
   function updateCameraKeys(dx,dy){
     const wanted=new Set();
-    const dead=12;
+    const dead=0.5;
     if(dx>dead) wanted.add('ArrowLeft');
     else if(dx<-dead) wanted.add('ArrowRight');
     if(dy>dead) wanted.add('ArrowUp');
@@ -115,6 +118,18 @@
         cameraHeld.add(name);
       }
     }
+  }
+
+  // GeneralsX @bugfix Codex 03/10/2026 Pan from the latest touch motion, not a held RMB or fixed origin.
+  function panCamera(previous,current){
+    const cv=canvas();
+    if(!cv) return;
+    const r=cv.getBoundingClientRect();
+    // Keep the engine cursor away from edge-scroll zones during camera gestures.
+    move({x:r.left+r.width/2,y:r.top+r.height/2},0);
+    updateCameraKeys(current.x-previous.x,current.y-previous.y);
+    if(cameraStopTimer!==null) clearTimeout(cameraStopTimer);
+    cameraStopTimer=setTimeout(releaseCameraKeys,80);
   }
 
   function sendEscape(){ key('Escape','Escape'); }
@@ -221,10 +236,7 @@
     }else if(e.touches.length===2){
       clearLong();
       if(dragging && one) mouse('mouseup',one.last,0,0);
-      if(cameraDragging && one){
-        move(one.last,2);
-        mouse('mouseup',one.last,2,0);
-      }
+      if(cameraDragging) releaseCameraKeys();
       releaseCameraKeys();
       selectArmed=false;
       document.getElementById('gx-m-select')?.classList.remove('gx-active');
@@ -239,6 +251,7 @@
     claimTouch(e);
     if(e.touches.length===1 && one){
       const p=touchPoint(e.touches[0]);
+      const previous=one.last;
       one.last=p;
       const moved=dist(p,one.start);
       if(moved>7){one.moved=true;clearLong();}
@@ -251,15 +264,8 @@
         }
         if(dragging) move(p,1);
       }else{
-        // Physical touch is isolated on #gx-touch-surface, so normal map pan can
-        // use the game's native RMB drag without SDL synthesizing a left drag.
-        releaseCameraKeys();
-        if(!cameraDragging && moved>9){
-          cameraDragging=true;
-          move(one.start,0);
-          mouse('mousedown',one.start,2,2);
-        }
-        if(cameraDragging) move(p,2);
+        if(!cameraDragging && moved>9) cameraDragging=true;
+        if(cameraDragging) panCamera(previous,p);
       }
       return;
     }
@@ -270,13 +276,14 @@
       if(!two) two={startMid:m,mid:m,dist:d,moved:false};
       const pinch=d-two.dist;
       if(Math.abs(pinch)>=7){
-        wheel(m,pinch>0?-100:100);
+        const cv=canvas(),r=cv.getBoundingClientRect();
+        wheel({x:r.left+r.width/2,y:r.top+r.height/2},pinch>0?-100:100);
         two.dist=d;
         two.moved=true;
       }
       const dx=m.x-two.startMid.x,dy=m.y-two.startMid.y;
       if(Math.hypot(dx,dy)>9){
-        updateCameraKeys(dx,dy);
+        panCamera(two.mid,m);
         two.moved=true;
       }
       two.mid=m;
@@ -304,8 +311,7 @@
       selectArmed=false;
       document.getElementById('gx-m-select')?.classList.remove('gx-active');
     }else if(cameraDragging){
-      move(p,2);
-      mouse('mouseup',p,2,0);
+      releaseCameraKeys();
     }else if(!one.moved){
       const now=performance.now();
       click(p,0);
@@ -320,10 +326,14 @@
     claimTouch(e);
     clearLong();
     if(dragging&&one) mouse('mouseup',one.last,0,0);
-    if(cameraDragging&&one){
-      move(one.last,2);
-      mouse('mouseup',one.last,2,0);
-    }
+    if(cameraDragging) releaseCameraKeys();
+    releaseCameraKeys();
+    one=null;two=null;dragging=false;cameraDragging=false;
+  }
+
+  function cancelGesture(){
+    clearLong();
+    if(dragging&&one) mouse('mouseup',one.last,0,0);
     releaseCameraKeys();
     one=null;two=null;dragging=false;cameraDragging=false;
   }
@@ -338,8 +348,10 @@
     document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
     document.addEventListener('gesturechange',e=>e.preventDefault(),{passive:false});
     document.addEventListener('dblclick',e=>{if(e.target===canvas())e.preventDefault();},{passive:false});
+    addEventListener('blur',cancelGesture);
+    document.addEventListener('visibilitychange',()=>{if(document.hidden) cancelGesture();});
     addEventListener('orientationchange',()=>{
-      releaseCameraKeys();
+      cancelGesture();
       landscapeFullscreenTried=false;
       setTimeout(syncViewport,50);
       setTimeout(syncViewport,250);
