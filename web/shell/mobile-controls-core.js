@@ -120,17 +120,16 @@
       cv.style.setProperty('top','0','important');
       cv.style.setProperty('right','auto','important');
       cv.style.setProperty('bottom','auto','important');
-      cv.style.setProperty('width',w+'px','important');
-      cv.style.setProperty('height',h+'px','important');
+      cv.style.setProperty('width','100vw','important');
+      cv.style.setProperty('height','100dvh','important');
       cv.style.setProperty('max-width','none','important');
       cv.style.setProperty('max-height','none','important');
       cv.style.setProperty('margin','0','important');
       cv.style.setProperty('padding','0','important');
       cv.style.setProperty('border','0','important');
       cv.style.setProperty('object-fit','fill','important');
-      if(window.Module?.calledRun){
-        try { Module.setCanvasSize(w,h,false); } catch {}
-      }
+      // Keep the engine/SDL backing-buffer resolution stable. Only CSS scales
+      // the already-rendered widescreen frame to fill the physical viewport.
     }
     scrollTo(0,0); focusCanvas();
   }
