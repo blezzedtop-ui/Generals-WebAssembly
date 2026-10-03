@@ -125,7 +125,7 @@
     delete window.__gxMobileGuardCoreLoaded;
   };
 
-  const src = 'mobile-controls-core.js?v=34';
+  const src = 'mobile-controls-core.js?v=35';
   if (document.readyState === 'loading') {
     document.write('<script src="' + src + '" onload="window.__gxMobileGuardCoreLoaded&&window.__gxMobileGuardCoreLoaded()"><\/script>');
   } else {
