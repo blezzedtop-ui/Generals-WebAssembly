@@ -1,7 +1,7 @@
 'use strict';
 // iPhone-first touch bridge for the Emscripten/SDL canvas.
-// One finger: tap/click, drag camera, SELECT-only box drag, long press/right-click.
-// Two fingers: right-drag camera pan; pinch: zoom; two-finger tap: right-click.
+// One finger: tap/select; drag = camera; SELECT-only drag = box selection.
+// Two fingers: camera pan + pinch zoom. Long press: right click.
 (function () {
   const isiPhone = /iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -11,28 +11,26 @@
   const uiTarget = t => !!(t && t.closest && (t.closest('#gx-mobile-controls') || t.closest('#gx-overlay') || t.closest('#gx-mp')));
 
   function focusCanvas() {
-    const cv = canvas();
-    if (!cv) return null;
+    const cv=canvas();
+    if(!cv) return null;
     try { cv.focus({preventScroll:true}); } catch { try { cv.focus(); } catch {} }
     return cv;
   }
 
-  // Clamp coordinates to the visible canvas. Safari's dynamic bars/safe areas can
-  // otherwise create events just outside the SDL target after an orientation change.
-  function clampPoint(p) {
-    const cv = canvas();
-    if (!cv) return p;
-    const r = cv.getBoundingClientRect();
+  function clampPoint(p){
+    const cv=canvas();
+    if(!cv) return p;
+    const r=cv.getBoundingClientRect();
     return {
-      x: Math.max(r.left + 1, Math.min(r.right - 1, p.x)),
-      y: Math.max(r.top + 1, Math.min(r.bottom - 1, p.y))
+      x:Math.max(r.left+1,Math.min(r.right-1,p.x)),
+      y:Math.max(r.top+1,Math.min(r.bottom-1,p.y))
     };
   }
-  const touchPoint = t => clampPoint({x:t.clientX, y:t.clientY});
-  const dist = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
-  const midpoint = (a,b) => ({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+  const touchPoint=t=>clampPoint({x:t.clientX,y:t.clientY});
+  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  const midpoint=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
 
-  function mouse(type,p,button=0,buttons=0) {
+  function mouse(type,p,button=0,buttons=0){
     const cv=focusCanvas(); if(!cv) return;
     p=clampPoint(p);
     const r=cv.getBoundingClientRect();
@@ -41,7 +39,6 @@
     if(window.Module?._gxWebSendMouse){
       const nativeType=type==='mousemove'?0:(type==='mousedown'?1:2);
       const sdlButton=button===2?3:1;
-      // DOM MouseEvent buttons uses RMB=2; SDL uses SDL_BUTTON_RMASK=4.
       const sdlButtons=(buttons&1?1:0)|(buttons&2?4:0);
       Module._gxWebSendMouse(nativeType,x,y,sdlButton,sdlButtons);
       return;
@@ -61,49 +58,82 @@
     cv.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,composed:true,view:window,
       clientX:p.x,clientY:p.y,deltaY,deltaMode:0}));
   }
+
   const sdlKeys={Escape:27,ArrowRight:1073741903,ArrowLeft:1073741904,ArrowDown:1073741905,ArrowUp:1073741906,F5:1073741886,F10:1073741891};
-  const nativeKeyReleases=new Map();
+  const pulseReleases=new Map();
   function key(name,code=name){
-    focusCanvas();
-    // Keep native keys down across at least one render/input tick.
+    const cv=focusCanvas(); if(!cv) return;
     const nativeKey=sdlKeys[name]||sdlKeys[code];
     if(nativeKey && window.Module?._gxWebSendKeyState){
       Module._gxWebSendKeyState(nativeKey,1);
-      const previous=nativeKeyReleases.get(nativeKey);
-      if(previous) clearTimeout(previous);
+      const old=pulseReleases.get(nativeKey); if(old) clearTimeout(old);
       const timer=setTimeout(()=>{
         if(window.Module?._gxWebSendKeyState) Module._gxWebSendKeyState(nativeKey,0);
-        nativeKeyReleases.delete(nativeKey);
+        pulseReleases.delete(nativeKey);
       },90);
-      nativeKeyReleases.set(nativeKey,timer);
+      pulseReleases.set(nativeKey,timer);
       return;
     }
     if(nativeKey && window.Module?._gxWebSendKey){ Module._gxWebSendKey(nativeKey); return; }
-    const cv=canvas(); if(!cv) return;
     const opts={key:name,code,bubbles:true,cancelable:true,composed:true};
     cv.dispatchEvent(new KeyboardEvent('keydown',opts));
     setTimeout(()=>cv.dispatchEvent(new KeyboardEvent('keyup',opts)),90);
   }
 
+  const cameraHeld=new Set();
+  function setHeldKey(name,down){
+    const cv=focusCanvas(); if(!cv) return;
+    const nativeKey=sdlKeys[name];
+    if(nativeKey && window.Module?._gxWebSendKeyState){
+      Module._gxWebSendKeyState(nativeKey,down?1:0);
+      return;
+    }
+    cv.dispatchEvent(new KeyboardEvent(down?'keydown':'keyup',{
+      key:name,code:name,bubbles:true,cancelable:true,composed:true
+    }));
+  }
+  function releaseCameraKeys(){
+    for(const name of Array.from(cameraHeld)) setHeldKey(name,false);
+    cameraHeld.clear();
+  }
+  function updateCameraKeys(dx,dy){
+    const wanted=new Set();
+    const dead=12;
+    // Map follows the finger: dragging right reveals the left side, etc.
+    if(dx>dead) wanted.add('ArrowLeft');
+    else if(dx<-dead) wanted.add('ArrowRight');
+    if(dy>dead) wanted.add('ArrowUp');
+    else if(dy<-dead) wanted.add('ArrowDown');
+
+    for(const name of Array.from(cameraHeld)){
+      if(!wanted.has(name)){
+        setHeldKey(name,false);
+        cameraHeld.delete(name);
+      }
+    }
+    for(const name of wanted){
+      if(!cameraHeld.has(name)){
+        setHeldKey(name,true);
+        cameraHeld.add(name);
+      }
+    }
+  }
+
   function sendEscape(){ key('Escape','Escape'); }
-  const landscape = () => {
+  const landscape=()=>{
     const vv=window.visualViewport;
-    const w=vv?vv.width:innerWidth, h=vv?vv.height:innerHeight;
+    const w=vv?vv.width:innerWidth,h=vv?vv.height:innerHeight;
     return w>h;
   };
 
   function syncViewport(){
-    const html=document.documentElement, body=document.body, cv=canvas();
+    const html=document.documentElement,body=document.body,cv=canvas();
     html.classList.add('gx-immersive','gx-iphone');
     const vv=window.visualViewport;
     const w=Math.max(1,Math.round(vv?vv.width:innerWidth));
     const h=Math.max(1,Math.round(vv?vv.height:innerHeight));
     html.style.setProperty('--gx-vw',w+'px');
     html.style.setProperty('--gx-vh',h+'px');
-
-    // Force the page and canvas to the exact visible viewport in landscape.
-    // viewport-fit=cover lets the game extend under the notch; controls already
-    // use safe-area insets so only the game picture reaches the physical edges.
     for(const el of [html,body]){
       if(!el) continue;
       el.style.setProperty('position','fixed','important');
@@ -128,27 +158,24 @@
       cv.style.setProperty('padding','0','important');
       cv.style.setProperty('border','0','important');
       cv.style.setProperty('object-fit','fill','important');
-      // Keep the engine/SDL backing-buffer resolution stable. Only CSS scales
-      // the already-rendered widescreen frame to fill the physical viewport.
     }
-    scrollTo(0,0); focusCanvas();
+    try{scrollTo(0,0);}catch{}
+    focusCanvas();
   }
 
   async function immersive(){
-    // Apply edge-to-edge sizing immediately. Fullscreen must be requested before
-    // awaiting orientation lock, otherwise Safari/Chrome may consume user activation.
     syncViewport();
     const cv=canvas();
     let fsPromise=null;
-    try {
+    try{
       if(!document.fullscreenElement && !document.webkitFullscreenElement){
         if(cv?.requestFullscreen) fsPromise=cv.requestFullscreen({navigationUI:'hide'});
         else if(cv?.webkitRequestFullscreen) cv.webkitRequestFullscreen();
         else if(document.documentElement.requestFullscreen) fsPromise=document.documentElement.requestFullscreen({navigationUI:'hide'});
       }
-    } catch {}
-    try { if(fsPromise) await fsPromise; } catch {}
-    try { if(screen.orientation?.lock) await screen.orientation.lock('landscape'); } catch {}
+    }catch{}
+    try{if(fsPromise) await fsPromise;}catch{}
+    try{if(screen.orientation?.lock) await screen.orientation.lock('landscape');}catch{}
     syncViewport();
     setTimeout(syncViewport,80);
     setTimeout(syncViewport,250);
@@ -164,60 +191,44 @@
     cv.addEventListener('contextmenu',e=>e.preventDefault());
   }
 
-  let one=null, dragging=false, cameraDragging=false, longTimer=null, two=null, lastTap={t:0,p:null}, selectArmed=false;
+  let one=null,dragging=false,cameraDragging=false,longTimer=null,two=null,lastTap={t:0,p:null},selectArmed=false;
   let landscapeFullscreenTried=false;
-  const clearLong=()=>{ if(longTimer) clearTimeout(longTimer); longTimer=null; };
-  function resetOne(){ clearLong(); one=null; dragging=false; cameraDragging=false; }
+  const clearLong=()=>{if(longTimer) clearTimeout(longTimer);longTimer=null;};
+  function resetOne(){clearLong();releaseCameraKeys();one=null;dragging=false;cameraDragging=false;}
   function claimTouch(e){
     if(e.cancelable) e.preventDefault();
-    // Core owns gameplay touch input. stopImmediatePropagation also blocks SDL's
-    // later raw touch listener from creating an unwanted left-button box select.
     e.stopImmediatePropagation();
-  }
-  function beginTwoFingerPan(a,b){
-    const m=midpoint(a,b);
-    move(m,0);
-    mouse('mousedown',m,2,2);
-    two={mid:m,dist:dist(a,b),moved:false,rightDown:true};
-  }
-  function endTwoFingerPan(){
-    if(!two) return;
-    if(two.rightDown){
-      move(two.mid,2);
-      mouse('mouseup',two.mid,2,0);
-    }
-    two=null;
   }
 
   function onStart(e){
     if(uiTarget(e.target)) return;
-    // First real game touch in landscape is a valid user gesture. Use it to
-    // request browser fullscreen where supported; iPhone Safari still keeps the
-    // edge-to-edge visual viewport sizing even when Fullscreen API is unavailable.
     if(!landscapeFullscreenTried && landscape()){
       landscapeFullscreenTried=true;
       void immersive();
     }
     claimTouch(e);
     if(e.touches.length===1){
+      releaseCameraKeys();
       const p=touchPoint(e.touches[0]);
-      one={start:p,last:p,longPressed:false,moved:false}; dragging=false; cameraDragging=false; two=null; move(p,0);
+      one={start:p,last:p,longPressed:false,moved:false};
+      dragging=false;cameraDragging=false;two=null;
+      move(p,0);
       clearLong();
       longTimer=setTimeout(()=>{
         if(!one||dragging||cameraDragging||one.moved) return;
-        click(one.last,2); one.longPressed=true;
+        click(one.last,2);
+        one.longPressed=true;
         if(navigator.vibrate) navigator.vibrate(18);
       },520);
-    } else if(e.touches.length===2){
+    }else if(e.touches.length===2){
       clearLong();
-      // Never leave a one-finger mouse button held when a second finger starts camera pan.
       if(dragging && one) mouse('mouseup',one.last,0,0);
-      if(cameraDragging && one) mouse('mouseup',one.last,2,0);
+      releaseCameraKeys();
       selectArmed=false;
       document.getElementById('gx-m-select')?.classList.remove('gx-active');
-      one=null; dragging=false; cameraDragging=false;
+      one=null;dragging=false;cameraDragging=true;
       const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]);
-      beginTwoFingerPan(a,b);
+      two={startMid:midpoint(a,b),mid:midpoint(a,b),dist:dist(a,b),moved:false};
     }
   }
 
@@ -228,47 +239,42 @@
       const p=touchPoint(e.touches[0]);
       one.last=p;
       const moved=dist(p,one.start);
-      if(moved>7){ one.moved=true; clearLong(); }
+      if(moved>7){one.moved=true;clearLong();}
 
       if(selectArmed){
+        releaseCameraKeys();
         if(!dragging && moved>9){
           dragging=true;
           move(one.start,0);
           mouse('mousedown',one.start,0,1);
         }
         if(dragging) move(p,1);
-      } else {
-        // Normal one-finger drag grabs the map with RMB. This keeps ordinary
-        // navigation separate from box selection, which is allowed only while
-        // the explicit SELECT button is armed.
-        if(!cameraDragging && moved>9){
-          cameraDragging=true;
-          move(one.start,0);
-          mouse('mousedown',one.start,2,2);
-        }
-        if(cameraDragging) move(p,2);
-        else if(one.moved) move(p,0);
+      }else{
+        // IMPORTANT: normal camera drag sends NO mouse-down at all.
+        // This makes box selection impossible unless SELECT is explicitly armed.
+        if(moved>9) cameraDragging=true;
+        if(cameraDragging) updateCameraKeys(p.x-one.start.x,p.y-one.start.y);
       }
       return;
     }
+
     if(e.touches.length===2){
       clearLong();
-      const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]),m=midpoint(a,b),d=dist(a,b);
-      if(!two) beginTwoFingerPan(a,b);
+      const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]);
+      const m=midpoint(a,b),d=dist(a,b);
+      if(!two) two={startMid:m,mid:m,dist:d,moved:false};
       const pinch=d-two.dist;
-      const pan=dist(m,two.mid);
       if(Math.abs(pinch)>=7){
         wheel(m,pinch>0?-100:100);
         two.dist=d;
         two.moved=true;
       }
-      // Match the engine's native touch scheme: two-finger camera movement is
-      // a held right-button drag at the fingers' centroid, not arrow-key pulses.
-      if(pan>=2){
-        move(m,2);
-        two.mid=m;
+      const dx=m.x-two.startMid.x,dy=m.y-two.startMid.y;
+      if(Math.hypot(dx,dy)>9){
+        updateCameraKeys(dx,dy);
         two.moved=true;
       }
+      two.mid=m;
     }
   }
 
@@ -276,33 +282,32 @@
     if(uiTarget(e.target)) return;
     claimTouch(e);
     clearLong();
+
     if(two){
-      // As soon as either finger leaves, release RMB so camera pan can never stick.
       if(e.touches.length<2){
-        endTwoFingerPan();
-        resetOne();
+        releaseCameraKeys();
+        two=null;
+        one=null;dragging=false;cameraDragging=false;
       }
       return;
     }
-    if(!one || e.touches.length) return;
-    const t=e.changedTouches?.[0], p=t?touchPoint(t):one.last;
-    if(one.longPressed){ resetOne(); return; }
+
+    if(!one||e.touches.length) return;
+    const t=e.changedTouches?.[0],p=t?touchPoint(t):one.last;
+    if(one.longPressed){resetOne();return;}
+
     if(dragging){
       move(p,1);
       mouse('mouseup',p,0,0);
       selectArmed=false;
       document.getElementById('gx-m-select')?.classList.remove('gx-active');
-    } else if(cameraDragging){
-      move(p,2);
-      mouse('mouseup',p,2,0);
-    } else if(!one.moved) {
+    }else if(cameraDragging){
+      releaseCameraKeys();
+    }else if(!one.moved){
       const now=performance.now();
       click(p,0);
-      // Two taps already produce the two clicks the game needs; do not inject a third click.
       if(lastTap.p && now-lastTap.t<300 && dist(p,lastTap.p)<24) lastTap={t:0,p:null};
       else lastTap={t:now,p};
-    } else {
-      move(p,0);
     }
     resetOne();
   }
@@ -311,25 +316,23 @@
     if(uiTarget(e.target)) return;
     claimTouch(e);
     clearLong();
-    if(dragging && one) mouse('mouseup',one.last,0,0);
-    if(cameraDragging && one) mouse('mouseup',one.last,2,0);
-    endTwoFingerPan();
-    one=null; dragging=false; cameraDragging=false;
+    if(dragging&&one) mouse('mouseup',one.last,0,0);
+    releaseCameraKeys();
+    one=null;two=null;dragging=false;cameraDragging=false;
   }
 
   function bind(){
     prepareCanvas();
     syncViewport();
-    // Capture touch before SDL/browser synthesis, then stop propagation so each
-    // finger gesture reaches the game exactly once through this bridge.
     document.addEventListener('touchstart',onStart,{passive:false,capture:true});
     document.addEventListener('touchmove',onMove,{passive:false,capture:true});
     document.addEventListener('touchend',onEnd,{passive:false,capture:true});
     document.addEventListener('touchcancel',onCancel,{passive:false,capture:true});
     document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
     document.addEventListener('gesturechange',e=>e.preventDefault(),{passive:false});
-    document.addEventListener('dblclick',e=>{ if(e.target===canvas()) e.preventDefault(); },{passive:false});
+    document.addEventListener('dblclick',e=>{if(e.target===canvas())e.preventDefault();},{passive:false});
     addEventListener('orientationchange',()=>{
+      releaseCameraKeys();
       landscapeFullscreenTried=false;
       setTimeout(syncViewport,50);
       setTimeout(syncViewport,250);
@@ -351,7 +354,10 @@
         if(b.dataset.key==='Escape') sendEscape(); else key(b.dataset.key,b.dataset.code);
       }));
       box.querySelector('[data-select]')?.addEventListener('pointerdown',e=>{
-        e.preventDefault();e.stopPropagation();selectArmed=!selectArmed;e.currentTarget.classList.toggle('gx-active',selectArmed);
+        e.preventDefault();e.stopPropagation();
+        releaseCameraKeys();
+        selectArmed=!selectArmed;
+        e.currentTarget.classList.toggle('gx-active',selectArmed);
       });
       box.querySelector('[data-fullscreen]')?.addEventListener('pointerdown',async e=>{
         e.preventDefault();e.stopPropagation();await immersive();
