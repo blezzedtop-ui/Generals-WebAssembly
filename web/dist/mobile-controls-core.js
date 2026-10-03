@@ -1,6 +1,6 @@
 'use strict';
 // iPhone-first touch bridge for the Emscripten/SDL canvas.
-// One finger: tap/select; drag = camera; SELECT-only drag = box selection.
+// One finger: tap/select; drag = direct map grab/pan; SELECT-only drag = box selection.
 // Two fingers: camera pan + pinch zoom. Long press: right click.
 (function () {
   const isiPhone = /iPhone|iPod/.test(navigator.userAgent) ||
@@ -221,6 +221,10 @@
     }else if(e.touches.length===2){
       clearLong();
       if(dragging && one) mouse('mouseup',one.last,0,0);
+      if(cameraDragging && one){
+        move(one.last,2);
+        mouse('mouseup',one.last,2,0);
+      }
       releaseCameraKeys();
       selectArmed=false;
       document.getElementById('gx-m-select')?.classList.remove('gx-active');
@@ -247,8 +251,15 @@
         }
         if(dragging) move(p,1);
       }else{
-        if(moved>9) cameraDragging=true;
-        if(cameraDragging) updateCameraKeys(p.x-one.start.x,p.y-one.start.y);
+        // Physical touch is isolated on #gx-touch-surface, so normal map pan can
+        // use the game's native RMB drag without SDL synthesizing a left drag.
+        releaseCameraKeys();
+        if(!cameraDragging && moved>9){
+          cameraDragging=true;
+          move(one.start,0);
+          mouse('mousedown',one.start,2,2);
+        }
+        if(cameraDragging) move(p,2);
       }
       return;
     }
@@ -293,7 +304,8 @@
       selectArmed=false;
       document.getElementById('gx-m-select')?.classList.remove('gx-active');
     }else if(cameraDragging){
-      releaseCameraKeys();
+      move(p,2);
+      mouse('mouseup',p,2,0);
     }else if(!one.moved){
       const now=performance.now();
       click(p,0);
@@ -308,6 +320,10 @@
     claimTouch(e);
     clearLong();
     if(dragging&&one) mouse('mouseup',one.last,0,0);
+    if(cameraDragging&&one){
+      move(one.last,2);
+      mouse('mouseup',one.last,2,0);
+    }
     releaseCameraKeys();
     one=null;two=null;dragging=false;cameraDragging=false;
   }
