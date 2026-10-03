@@ -312,10 +312,9 @@
       two.dist=d;
       two.zoomCarry=(two.zoomCarry||0)+pinch;
       if(Math.abs(two.zoomCarry)>=2.2){
-        const cv=canvas(),r=cv.getBoundingClientRect();
-        const step=Math.max(-28,Math.min(28,-two.zoomCarry*5.5));
-        wheel({x:r.left+r.width/2,y:r.top+r.height/2},step);
-        two.zoomCarry*=0.35;
+        const step=Math.max(-16,Math.min(16,-two.zoomCarry*3.2));
+        wheel(m,step);
+        two.zoomCarry*=0.18;
         two.moved=true;
       }
       const dx=m.x-two.startMid.x,dy=m.y-two.startMid.y;
