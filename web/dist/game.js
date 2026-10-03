@@ -55,6 +55,22 @@ function gxGameArguments() {
     if (args[i].toLowerCase() === '-quickstart' || args[i].toLowerCase() === '-noshellmap') args.splice(i, 1);
   }
   if (!args.some(a => a.toLowerCase() === '-nologo')) args.push('-nologo');
+
+  // Mobile landscape resolution must be present in Module.arguments BEFORE
+  // Emscripten creates argc/argv. Adding -xres/-yres from C++ after main()
+  // starts is too late, leaving the Generals viewport at its old small size
+  // while CSS stretches only the outer canvas.
+  if (navigator.maxTouchPoints > 0) {
+    const vv = window.visualViewport;
+    let w = Math.max(320, Math.round(vv ? vv.width : window.innerWidth));
+    let h = Math.max(200, Math.round(vv ? vv.height : window.innerHeight));
+    if (h > w) { const t = w; w = h; h = t; }
+    const hasArg = (name) => args.some(a => String(a).toLowerCase() === name);
+    if (!hasArg('-xres')) args.push('-xres', String(w));
+    if (!hasArg('-yres')) args.push('-yres', String(h));
+    if (!hasArg('-forcefullviewport')) args.push('-forcefullviewport');
+  }
+
   // Loader settings (index.html #gx-settings): FPS limit -> engine -fps.
   // An explicit -fps in ?args= wins.
   if (!args.includes('-fps')) {
