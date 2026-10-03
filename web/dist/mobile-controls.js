@@ -1,7 +1,7 @@
 'use strict';
 // iPhone-first touch bridge for the Emscripten/SDL canvas.
-// One finger: tap/click, drag/box-select, long press/right-click.
-// Two fingers: pan camera; pinch: zoom; two-finger tap: right-click.
+// One finger: tap/click, SELECT-only box drag, long press/right-click.
+// Two fingers: right-drag camera pan; pinch: zoom; two-finger tap: right-click.
 (function () {
   const isiPhone = /iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -41,7 +41,9 @@
     if(window.Module?._gxWebSendMouse){
       const nativeType=type==='mousemove'?0:(type==='mousedown'?1:2);
       const sdlButton=button===2?3:1;
-      Module._gxWebSendMouse(nativeType,x,y,sdlButton,buttons);
+      // DOM MouseEvent buttons uses RMB=2; SDL uses SDL_BUTTON_RMASK=4.
+      const sdlButtons=(buttons&1?1:0)|(buttons&2?4:0);
+      Module._gxWebSendMouse(nativeType,x,y,sdlButton,sdlButtons);
       return;
     }
     cv.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,composed:true,view:window,
@@ -63,8 +65,7 @@
   const nativeKeyReleases=new Map();
   function key(name,code=name){
     focusCanvas();
-    // Keep native keys down across at least one render/input tick. Sending SDL
-    // KEY_DOWN + KEY_UP back-to-back made held actions such as camera pan vanish.
+    // Keep native keys down across at least one render/input tick.
     const nativeKey=sdlKeys[name]||sdlKeys[code];
     if(nativeKey && window.Module?._gxWebSendKeyState){
       Module._gxWebSendKeyState(nativeKey,1);
@@ -104,9 +105,6 @@
   }
 
   async function immersive(){
-    // iPhone Safari normally does not expose arbitrary page fullscreen/orientation
-    // locking. Keep these as progressive enhancement; viewport sync itself does
-    // not depend on fullscreen permission and is always applied.
     try { if(screen.orientation?.lock) await screen.orientation.lock('landscape'); } catch {}
     try {
       const cv=canvas();
@@ -131,91 +129,133 @@
   let one=null, dragging=false, longTimer=null, two=null, lastTap={t:0,p:null}, selectArmed=false;
   const clearLong=()=>{ if(longTimer) clearTimeout(longTimer); longTimer=null; };
   function resetOne(){ clearLong(); one=null; dragging=false; }
+  function claimTouch(e){
+    if(e.cancelable) e.preventDefault();
+    e.stopPropagation();
+  }
+  function beginTwoFingerPan(a,b){
+    const m=midpoint(a,b);
+    move(m,0);
+    mouse('mousedown',m,2,2);
+    two={mid:m,dist:dist(a,b),moved:false,rightDown:true};
+  }
+  function endTwoFingerPan(){
+    if(!two) return;
+    if(two.rightDown){
+      move(two.mid,2);
+      mouse('mouseup',two.mid,2,0);
+    }
+    two=null;
+  }
 
   function onStart(e){
     if(uiTarget(e.target)) return;
-    if(e.cancelable) e.preventDefault();
+    claimTouch(e);
     if(e.touches.length===1){
       const p=touchPoint(e.touches[0]);
-      one={start:p,last:p,longPressed:false}; dragging=false; two=null; move(p,0);
+      one={start:p,last:p,longPressed:false,moved:false}; dragging=false; two=null; move(p,0);
       clearLong();
       longTimer=setTimeout(()=>{
-        if(!one||dragging) return;
+        if(!one||dragging||one.moved) return;
         click(one.last,2); one.longPressed=true;
         if(navigator.vibrate) navigator.vibrate(18);
       },520);
     } else if(e.touches.length===2){
       clearLong();
-      // GeneralsX @bugfix OpenAI 01/10/2026 Never leave a SELECT mouse-down held when a second finger starts camera pan.
+      // Never leave a SELECT mouse-down held when a second finger starts camera pan.
       if(dragging && one) mouse('mouseup',one.last,0,0);
       selectArmed=false;
       document.getElementById('gx-m-select')?.classList.remove('gx-active');
       one=null; dragging=false;
-      const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]),m=midpoint(a,b);
-      two={mid:m,dist:dist(a,b),moved:false};
+      const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]);
+      beginTwoFingerPan(a,b);
     }
   }
 
   function onMove(e){
     if(uiTarget(e.target)) return;
-    if(e.cancelable) e.preventDefault();
+    claimTouch(e);
     if(e.touches.length===1 && one){
-      const p=touchPoint(e.touches[0]); one.last=p;
-      if(selectArmed && !dragging && dist(p,one.start)>9){
-        dragging=true; clearLong(); move(one.start,0); mouse('mousedown',one.start,0,1);
+      const p=touchPoint(e.touches[0]);
+      one.last=p;
+      const moved=dist(p,one.start);
+      if(moved>7){ one.moved=true; clearLong(); }
+      if(selectArmed && !dragging && moved>9){
+        dragging=true;
+        move(one.start,0);
+        mouse('mousedown',one.start,0,1);
       }
       if(dragging) move(p,1);
+      else if(one.moved) move(p,0);
       return;
     }
     if(e.touches.length===2){
       clearLong();
       const a=touchPoint(e.touches[0]),b=touchPoint(e.touches[1]),m=midpoint(a,b),d=dist(a,b);
-      if(!two) two={mid:m,dist:d,moved:false};
-      const pinch=d-two.dist, dx=m.x-two.mid.x, dy=m.y-two.mid.y;
-      if(Math.abs(pinch)>=8){ wheel(m,pinch>0?-100:100); two.dist=d; two.moved=true; }
-      // Repeated key pulses are more reliable than synthetic mouse-edge scrolling in SDL.
-      if(Math.abs(dx)>=13){ key(dx>0?'ArrowRight':'ArrowLeft'); two.mid.x=m.x; two.moved=true; }
-      if(Math.abs(dy)>=13){ key(dy>0?'ArrowDown':'ArrowUp'); two.mid.y=m.y; two.moved=true; }
+      if(!two) beginTwoFingerPan(a,b);
+      const pinch=d-two.dist;
+      const pan=dist(m,two.mid);
+      if(Math.abs(pinch)>=7){
+        wheel(m,pinch>0?-100:100);
+        two.dist=d;
+        two.moved=true;
+      }
+      // Match the engine's native touch scheme: two-finger camera movement is
+      // a held right-button drag at the fingers' centroid, not arrow-key pulses.
+      if(pan>=2){
+        move(m,2);
+        two.mid=m;
+        two.moved=true;
+      }
     }
   }
 
   function onEnd(e){
     if(uiTarget(e.target)) return;
-    if(e.cancelable) e.preventDefault(); clearLong();
+    claimTouch(e);
+    clearLong();
     if(two){
-      if(e.touches.length===0){
-        if(!two.moved) click(two.mid,2);
-        two=null; resetOne();
+      // As soon as either finger leaves, release RMB so camera pan can never stick.
+      if(e.touches.length<2){
+        endTwoFingerPan();
+        resetOne();
       }
       return;
     }
     if(!one || e.touches.length) return;
     const t=e.changedTouches?.[0], p=t?touchPoint(t):one.last;
     if(one.longPressed){ resetOne(); return; }
-    if(dragging){ move(p,1); mouse('mouseup',p,0,0); selectArmed=false; document.getElementById('gx-m-select')?.classList.remove('gx-active'); }
-    else {
+    if(dragging){
+      move(p,1);
+      mouse('mouseup',p,0,0);
+      selectArmed=false;
+      document.getElementById('gx-m-select')?.classList.remove('gx-active');
+    } else if(!one.moved) {
       const now=performance.now();
       click(p,0);
-      if(lastTap.p && now-lastTap.t<300 && dist(p,lastTap.p)<24){
-        setTimeout(()=>click(p,0),45); lastTap={t:0,p:null};
-      } else lastTap={t:now,p};
+      // Two taps already produce the two clicks the game needs; do not inject a third click.
+      if(lastTap.p && now-lastTap.t<300 && dist(p,lastTap.p)<24) lastTap={t:0,p:null};
+      else lastTap={t:now,p};
+    } else {
+      move(p,0);
     }
     resetOne();
   }
 
   function onCancel(e){
+    if(uiTarget(e.target)) return;
+    claimTouch(e);
     clearLong();
     if(dragging && one) mouse('mouseup',one.last,0,0);
-    one=null; two=null; dragging=false;
-    if(e.cancelable) e.preventDefault();
+    endTwoFingerPan();
+    one=null; dragging=false;
   }
 
   function bind(){
     prepareCanvas();
-    // Apply edge-to-edge visualViewport sizing immediately, even when Safari
-    // refuses Fullscreen API or the page was already opened in landscape.
     syncViewport();
-    // Capture on document so SDL's own touch listeners cannot consume the gesture first.
+    // Capture touch before SDL/browser synthesis, then stop propagation so each
+    // finger gesture reaches the game exactly once through this bridge.
     document.addEventListener('touchstart',onStart,{passive:false,capture:true});
     document.addEventListener('touchmove',onMove,{passive:false,capture:true});
     document.addEventListener('touchend',onEnd,{passive:false,capture:true});
