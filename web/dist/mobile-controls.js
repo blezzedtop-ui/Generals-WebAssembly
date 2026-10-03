@@ -38,8 +38,6 @@
     requestAnimationFrame(() => {
       if (activeTouches !== 0) return;
       if (sync) {
-        // Recompute the current visual viewport once, after the gesture. Do not
-        // replay an older blocked canvas size after this fresh sync.
         pendingCanvasResize = null;
         try { sync(); } catch {}
       } else if (window.Module?.__gxFlushTouchCanvasResize) {
@@ -69,10 +67,6 @@
     flushAfterGesture();
   }, { passive: true, capture: true });
 
-  // The core bridge registers syncViewport directly on window/visualViewport.
-  // Wrap only those registrations while the core loads, then restore the native
-  // addEventListener methods. This keeps horizontal/vertical camera gestures
-  // from resizing/repositioning the game surface mid-drag.
   const nativeWindowAdd = window.addEventListener;
   const nativeVvAdd = vv && vv.addEventListener;
 
@@ -102,8 +96,6 @@
     };
   }
 
-  // Emscripten exposes setCanvasSize only after the engine glue initializes.
-  // Wrap it once and defer resize requests while any game touch is held.
   const wrapTimer = setInterval(() => {
     const mod = window.Module;
     if (!mod || typeof mod.setCanvasSize !== 'function' || mod.__gxTouchCanvasResizeGuard) return;
@@ -135,7 +127,7 @@
 
   const src = 'mobile-controls-core.js?v=34';
   if (document.readyState === 'loading') {
-    document.write('<script src="' + src + '" onload="window.__gxMobileGuardCoreLoaded&&window.__gxMobileGuardCoreLoaded()"><\\/script>');
+    document.write('<script src="' + src + '" onload="window.__gxMobileGuardCoreLoaded&&window.__gxMobileGuardCoreLoaded()"><\/script>');
   } else {
     const s = document.createElement('script');
     s.src = src;
