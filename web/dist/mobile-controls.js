@@ -329,10 +329,12 @@
     btn.__gxCancelPolished = true;
     btn.setAttribute('aria-label', 'Cancel current selection or command');
     btn.setAttribute('title', 'Cancel');
-    btn.style.left = 'auto';
-    btn.style.top = 'auto';
-    btn.style.right = '84px';
-    btn.style.bottom = '92px';
+    // Keep X far away from SELECT: X stays at the top-left next to ESC,
+    // while SELECT remains on the lower-right side of the game screen.
+    btn.style.left = '76px';
+    btn.style.top = '18px';
+    btn.style.right = 'auto';
+    btn.style.bottom = 'auto';
     btn.style.width = '52px';
     btn.style.height = '46px';
     btn.style.borderRadius = '10px';

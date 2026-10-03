@@ -2,7 +2,7 @@
 // Safari dependency guard: keep the original loader in loader-core.js and
 // re-fetch game.js if an old/mixed tab reached the loader without gxPreloadEngine.
 (function () {
-  const v = 'save-load-20261003-01';
+  const v = 'save-load-20261003-02';
   function write(src) {
     document.write('<script src="' + src + '"><\/script>');
   }

@@ -48,6 +48,7 @@
 #include <cstring>
 #include <cstdio>
 #include <string>
+#include <atomic>
 #include <unistd.h>   // _exit(), chdir()
 #include <sys/stat.h>
 #include <dirent.h>   // userdata write-back walk
@@ -69,6 +70,7 @@ static int s_gxFpsSetting = 0;
 #include "Common/CommandLine.h"
 #include "Common/CriticalSection.h"
 #include "Common/GlobalData.h"
+#include "Common/GameState.h"
 #include "Common/GameEngine.h"
 #include "Common/FramePacer.h"
 #include "Common/GameMemory.h"
@@ -99,6 +101,20 @@ const Char *g_strFile = "data/Generals.str";
 
 // Extern declarations (from GameMain.cpp)
 extern Int GameMain();
+
+// Dedicated mobile save/load requests. JS only flips this atomic; the actual
+// GameState work runs from gxWebPeriodic() on the game thread.
+static std::atomic<int> s_gxMobileSaveLoadAction{0};
+
+extern "C" EMSCRIPTEN_KEEPALIVE void gxWebQuickSave()
+{
+	s_gxMobileSaveLoadAction.store(1, std::memory_order_release);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void gxWebQuickLoad()
+{
+	s_gxMobileSaveLoadAction.store(2, std::memory_order_release);
+}
 
 // Native browser -> SDL key bridge. Exported to JS as Module._gxWebSendKey.
 // This bypasses untrusted synthetic KeyboardEvent on iPhone Safari.
@@ -308,6 +324,34 @@ extern "C" void gxWebPeriodic(void)
 			TheFramePacer->enableLogicTimeScale(true);
 			TheFramePacer->setFramesPerSecondLimit(s_gxFpsSetting);
 		}
+	}
+
+	const int mobileAction = s_gxMobileSaveLoadAction.exchange(0, std::memory_order_acq_rel);
+	if (mobileAction != 0 && TheGameState) {
+		AsciiString filename("WebQuickSave.sav");
+		SaveCode code = SC_ERROR;
+		if (mobileAction == 1) {
+			code = TheGameState->saveGame(filename, UnicodeString::TheEmptyString, SAVE_FILE_TYPE_NORMAL);
+			// IndexedDB fallback is session-local, so persist the save immediately
+			// instead of waiting for the normal 20-second userdata backup.
+			if (code == SC_OK && s_gxIdbMode) GxBackupUserdataDir("/opfs/userdata", "");
+		} else if (mobileAction == 2) {
+			if (TheGameState->doesSaveGameExist(filename)) {
+				AvailableGameInfo game;
+				game.filename = filename;
+				game.next = nullptr;
+				game.prev = nullptr;
+				TheGameState->getSaveGameInfoFromFile(filename, &game.saveGameInfo);
+				code = TheGameState->loadGame(game);
+			} else {
+				code = SC_FILE_NOT_FOUND;
+			}
+		}
+		MAIN_THREAD_EM_ASM({
+			window.dispatchEvent(new CustomEvent('gx-mobile-save-load-status', {
+				detail: { action: $0, code: $1 }
+			}));
+		}, mobileAction, (int)code);
 	}
 
 	if (!s_gxIdbMode) return;
