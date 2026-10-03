@@ -3,106 +3,89 @@
  * doesn't send Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy
  * headers (plain nginx, GitHub Pages, shared hosting...). Without those
  * headers the browser refuses SharedArrayBuffer and pthreads cannot start.
- *
- * How it works: on first visit this script registers ITSELF as a service
- * worker and reloads the page once; from then on the SW intercepts every
- * same-origin fetch and adds the two headers to the response. Requires a
- * secure context (HTTPS or localhost) - nothing can help plain http://<ip>.
- *
- * Pattern after gzuidhof/coi-serviceworker (MIT).
- * GeneralsX @build web-port 05/07/2026 - Web port (static hosting mode)
  */
-
 /* eslint-env serviceworker, browser */
 'use strict';
 
 if (typeof window === 'undefined') {
-  // ---- Service worker context ----
   self.addEventListener('install', () => self.skipWaiting());
   self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
-
   self.addEventListener('message', (ev) => {
     if (ev.data && ev.data.type === 'deregister') {
       self.registration.unregister().then(() => self.clients.matchAll())
         .then((clients) => clients.forEach((c) => c.navigate(c.url)));
     }
   });
-
   self.addEventListener('fetch', (e) => {
     const r = e.request;
-
-    // Big binaries (the ~1.1 GB build.data archive and the ~78 MB wasm) must
-    // NOT be piped through the SW: re-wrapping their body streams every chunk
-    // through the service-worker thread, which blows past iOS Safari's tight SW
-    // memory/lifetime limits and gets the SW killed mid-download ("Service
-    // Worker context closed"). They are same-origin, so COEP: require-corp
-    // allows them by default (CORP defaults to same-origin) without any rewrite
-    // — fetch them straight from the network.
     const path = (() => { try { return new URL(r.url).pathname; } catch { return ''; } })();
     if (path.endsWith('.data') || path.endsWith('.wasm')) return;
-
-    // iOS Safari can keep an older JS response alive even after a new deployment
-    // when the URL/query string is unchanged. For the small shell resources force
-    // a network revalidation with no-store so mobile-controls/loadscreen/game.js
-    // always come from the current production deployment.
-    e.respondWith(
-      fetch(r, { cache: 'no-store' }).then((res) => {
-        if (res.status === 0) return res; // opaque
-        const headers = new Headers(res.headers);
-        headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
-        headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-        headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
-        headers.set('Cache-Control', 'no-store, max-age=0');
-        return new Response(res.body, {
-          status: res.status,
-          statusText: res.statusText,
-          headers: headers,
-        });
-      }).catch((err) => {
-        console.error('[coi-sw] fetch failed:', err);
-        throw err;
-      })
-    );
+    e.respondWith(fetch(r, { cache: 'no-store' }).then((res) => {
+      if (res.status === 0) return res;
+      const headers = new Headers(res.headers);
+      headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+      headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+      headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+      headers.set('Cache-Control', 'no-store, max-age=0');
+      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+    }));
   });
 } else {
-  // ---- Window context: register + one-time reload ----
   (() => {
-    if (window.crossOriginIsolated) return; // host already sends the headers
-
-    if (!window.isSecureContext) {
-      console.warn('[coi-sw] not a secure context - service worker cannot help; use HTTPS');
-      return;
+    const head = document.head || document.documentElement;
+    if (!document.querySelector('link[rel="manifest"]')) {
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = 'manifest.webmanifest?v=1';
+      head.appendChild(link);
     }
-    if (!('serviceWorker' in navigator)) {
-      console.warn('[coi-sw] no serviceWorker support');
-      return;
+    const ensureMeta = (name, content) => {
+      let m = document.querySelector('meta[name="' + name + '"]');
+      if (!m) { m = document.createElement('meta'); m.name = name; head.appendChild(m); }
+      m.content = content;
+    };
+    ensureMeta('mobile-web-app-capable', 'yes');
+    ensureMeta('apple-mobile-web-app-capable', 'yes');
+    ensureMeta('apple-mobile-web-app-status-bar-style', 'black-translucent');
+    ensureMeta('apple-mobile-web-app-title', 'Generals ZH');
+    ensureMeta('theme-color', '#000000');
+
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+    if (standalone) {
+      document.documentElement.classList.add('gx-pwa-fullscreen');
+      const style = document.createElement('style');
+      style.textContent = `
+        html.gx-pwa-fullscreen, html.gx-pwa-fullscreen body {
+          position:fixed!important; inset:0!important; margin:0!important; padding:0!important;
+          width:100dvw!important; height:100dvh!important; overflow:hidden!important; background:#000!important;
+        }
+        html.gx-pwa-fullscreen #canvas, html.gx-pwa-fullscreen #gx-touch-surface {
+          position:fixed!important; inset:0!important; width:100dvw!important; height:100dvh!important;
+          max-width:none!important; max-height:none!important; margin:0!important; padding:0!important;
+        }
+        html.gx-pwa-fullscreen #gx-m-full { display:none!important; }
+      `;
+      head.appendChild(style);
+      const sync = () => {
+        const vv = window.visualViewport;
+        const w = Math.max(1, Math.round(vv ? vv.width : innerWidth));
+        const h = Math.max(1, Math.round(vv ? vv.height : innerHeight));
+        document.documentElement.style.setProperty('--gx-vw', w + 'px');
+        document.documentElement.style.setProperty('--gx-vh', h + 'px');
+      };
+      sync();
+      addEventListener('resize', sync);
+      window.visualViewport?.addEventListener('resize', sync);
     }
 
+    if (window.crossOriginIsolated) return;
+    if (!window.isSecureContext || !('serviceWorker' in navigator)) return;
     const swUrl = document.currentScript && document.currentScript.src;
     if (!swUrl) return;
-
-    // Signal to the loader that a COI reload may be coming.
     window.gxCoiPending = true;
-
     navigator.serviceWorker.register(swUrl)
-      .then((reg) => {
-        console.log('[coi-sw] registered, scope:', reg.scope);
-        // Force an update check so a changed SW script is picked up promptly
-        // instead of the browser lazily keeping an old cached worker.
-        reg.update().catch(() => {});
-        // ready resolves once a worker is ACTIVE (covers the first-install
-        // race where updatefound fires before listeners attach).
-        return navigator.serviceWorker.ready;
-      })
-      .then(() => {
-        if (!navigator.serviceWorker.controller) {
-          console.log('[coi-sw] active but not controlling - reloading to pick up COOP/COEP...');
-          window.location.reload();
-        }
-      })
-      .catch((e) => {
-        console.error('[coi-sw] registration failed:', e);
-        window.gxCoiPending = false;
-      });
+      .then((reg) => { reg.update().catch(() => {}); return navigator.serviceWorker.ready; })
+      .then(() => { if (!navigator.serviceWorker.controller) window.location.reload(); })
+      .catch(() => { window.gxCoiPending = false; });
   })();
 }
