@@ -392,6 +392,26 @@
     e.stopImmediatePropagation();
     resetPan(false);
 
+    // Generals cancel command: send a native right-click at the current
+    // in-game cursor position. X remains separate from the ESC/menu key.
+    try {
+      const cv = document.getElementById('canvas');
+      if (cv) {
+        const r = cv.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        const x = (cx - r.left) * cv.width / Math.max(1, r.width);
+        const y = (cy - r.top) * cv.height / Math.max(1, r.height);
+        if (window.Module?._gxWebSendMouse) {
+          Module._gxWebSendMouse(1, x, y, 3, 4);
+          Module._gxWebSendMouse(2, x, y, 3, 0);
+        } else {
+          cv.dispatchEvent(new MouseEvent('mousedown', {bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:2,buttons:2}));
+          cv.dispatchEvent(new MouseEvent('mouseup', {bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:2,buttons:0}));
+        }
+      }
+    } catch (_) {}
+
     // If box SELECT is armed, toggle it off through its own handler so the
     // legacy core's internal selectArmed state stays in sync with the UI.
     const selectBtn = document.getElementById('gx-m-select');
