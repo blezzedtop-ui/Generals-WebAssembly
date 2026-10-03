@@ -138,7 +138,7 @@
   };
 
   lockPageGestures();
-  const src='mobile-controls-core.js?v=37';
+  const src='mobile-controls-core.js?v=38';
   if (document.readyState === 'loading') {
     document.write('<script src="'+src+'" onload="window.__gxMobileGuardCoreLoaded&&window.__gxMobileGuardCoreLoaded()"><\/script>');
   } else {
