@@ -86,17 +86,48 @@
   }
 
   function sendEscape(){ key('Escape','Escape'); }
+  const landscape = () => {
+    const vv=window.visualViewport;
+    const w=vv?vv.width:innerWidth, h=vv?vv.height:innerHeight;
+    return w>h;
+  };
 
   function syncViewport(){
-    document.documentElement.classList.add('gx-immersive','gx-iphone');
+    const html=document.documentElement, body=document.body, cv=canvas();
+    html.classList.add('gx-immersive','gx-iphone');
     const vv=window.visualViewport;
     const w=Math.max(1,Math.round(vv?vv.width:innerWidth));
     const h=Math.max(1,Math.round(vv?vv.height:innerHeight));
-    document.documentElement.style.setProperty('--gx-vw',w+'px');
-    document.documentElement.style.setProperty('--gx-vh',h+'px');
-    const cv=canvas();
+    html.style.setProperty('--gx-vw',w+'px');
+    html.style.setProperty('--gx-vh',h+'px');
+
+    // Force the page and canvas to the exact visible viewport in landscape.
+    // viewport-fit=cover lets the game extend under the notch; controls already
+    // use safe-area insets so only the game picture reaches the physical edges.
+    for(const el of [html,body]){
+      if(!el) continue;
+      el.style.setProperty('position','fixed','important');
+      el.style.setProperty('inset','0','important');
+      el.style.setProperty('width',w+'px','important');
+      el.style.setProperty('height',h+'px','important');
+      el.style.setProperty('margin','0','important');
+      el.style.setProperty('padding','0','important');
+      el.style.setProperty('overflow','hidden','important');
+    }
     if(cv){
-      cv.style.width=w+'px'; cv.style.height=h+'px';
+      cv.style.setProperty('position','fixed','important');
+      cv.style.setProperty('left','0','important');
+      cv.style.setProperty('top','0','important');
+      cv.style.setProperty('right','auto','important');
+      cv.style.setProperty('bottom','auto','important');
+      cv.style.setProperty('width',w+'px','important');
+      cv.style.setProperty('height',h+'px','important');
+      cv.style.setProperty('max-width','none','important');
+      cv.style.setProperty('max-height','none','important');
+      cv.style.setProperty('margin','0','important');
+      cv.style.setProperty('padding','0','important');
+      cv.style.setProperty('border','0','important');
+      cv.style.setProperty('object-fit','fill','important');
       if(window.Module?.calledRun){
         try { Module.setCanvasSize(w,h,false); } catch {}
       }
@@ -105,16 +136,24 @@
   }
 
   async function immersive(){
-    try { if(screen.orientation?.lock) await screen.orientation.lock('landscape'); } catch {}
+    // Apply edge-to-edge sizing immediately. Fullscreen must be requested before
+    // awaiting orientation lock, otherwise Safari/Chrome may consume user activation.
+    syncViewport();
+    const cv=canvas();
+    let fsPromise=null;
     try {
-      const cv=canvas();
-      if(!document.fullscreenElement){
-        if(cv?.requestFullscreen) await cv.requestFullscreen({navigationUI:'hide'});
+      if(!document.fullscreenElement && !document.webkitFullscreenElement){
+        if(cv?.requestFullscreen) fsPromise=cv.requestFullscreen({navigationUI:'hide'});
         else if(cv?.webkitRequestFullscreen) cv.webkitRequestFullscreen();
-        else if(document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({navigationUI:'hide'});
+        else if(document.documentElement.requestFullscreen) fsPromise=document.documentElement.requestFullscreen({navigationUI:'hide'});
       }
     } catch {}
-    syncViewport(); setTimeout(syncViewport,150); setTimeout(syncViewport,500);
+    try { if(fsPromise) await fsPromise; } catch {}
+    try { if(screen.orientation?.lock) await screen.orientation.lock('landscape'); } catch {}
+    syncViewport();
+    setTimeout(syncViewport,80);
+    setTimeout(syncViewport,250);
+    setTimeout(syncViewport,700);
   }
   window.gxEnterMobileGameMode=immersive;
 
@@ -127,6 +166,7 @@
   }
 
   let one=null, dragging=false, longTimer=null, two=null, lastTap={t:0,p:null}, selectArmed=false;
+  let landscapeFullscreenTried=false;
   const clearLong=()=>{ if(longTimer) clearTimeout(longTimer); longTimer=null; };
   function resetOne(){ clearLong(); one=null; dragging=false; }
   function claimTouch(e){
@@ -150,6 +190,13 @@
 
   function onStart(e){
     if(uiTarget(e.target)) return;
+    // First real game touch in landscape is a valid user gesture. Use it to
+    // request browser fullscreen where supported; iPhone Safari still keeps the
+    // edge-to-edge visual viewport sizing even when Fullscreen API is unavailable.
+    if(!landscapeFullscreenTried && landscape()){
+      landscapeFullscreenTried=true;
+      void immersive();
+    }
     claimTouch(e);
     if(e.touches.length===1){
       const p=touchPoint(e.touches[0]);
@@ -263,8 +310,19 @@
     document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
     document.addEventListener('gesturechange',e=>e.preventDefault(),{passive:false});
     document.addEventListener('dblclick',e=>{ if(e.target===canvas()) e.preventDefault(); },{passive:false});
-    addEventListener('orientationchange',()=>setTimeout(syncViewport,180));
-    if(window.visualViewport) visualViewport.addEventListener('resize',syncViewport);
+    addEventListener('orientationchange',()=>{
+      landscapeFullscreenTried=false;
+      setTimeout(syncViewport,50);
+      setTimeout(syncViewport,250);
+      setTimeout(syncViewport,700);
+    });
+    addEventListener('resize',syncViewport);
+    if(window.visualViewport){
+      visualViewport.addEventListener('resize',syncViewport);
+      visualViewport.addEventListener('scroll',syncViewport);
+    }
+    document.addEventListener('fullscreenchange',syncViewport);
+    document.addEventListener('webkitfullscreenchange',syncViewport);
 
     const box=document.getElementById('gx-mobile-controls');
     if(box){
