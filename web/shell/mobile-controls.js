@@ -340,8 +340,8 @@
     const btn = document.getElementById('gx-m-close');
     if (!btn || btn.__gxCancelPolished) return !!btn;
     btn.__gxCancelPolished = true;
-    btn.setAttribute('aria-label', 'Cancel current selection or command');
-    btn.setAttribute('title', 'Cancel');
+    btn.setAttribute('aria-label', 'Cancel touch or SELECT mode');
+    btn.setAttribute('title', 'Cancel touch / SELECT');
     // Keep X far away from SELECT: X stays at the top-left next to ESC,
     // while SELECT remains on the lower-right side of the game screen.
     btn.style.left = '76px';
@@ -357,8 +357,8 @@
     return true;
   }
 
-  // Handle X in capture phase so it is one deterministic cancel action rather
-  // than double-firing the legacy close handler.
+  // Handle X in capture phase as a mobile-control cancel only.
+  // ESC remains the dedicated in-game Escape key handled by the base controls.
   document.addEventListener('pointerdown', e => {
     const btn = e.target?.closest?.('#gx-m-close,[data-close]');
     if (!btn) return;
@@ -378,7 +378,6 @@
         selectBtn.classList.remove('gx-active');
       }
     }
-    pulseEscape();
     try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
   }, { capture: true, passive: false });
 
