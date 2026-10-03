@@ -40,7 +40,7 @@ jobs:
         run: |
           rm -rf web/dist
           mkdir -p web/dist/i18n
-          cp web/shell/*.js web/shell/index.html web/dist/
+          cp web/shell/*.js web/shell/index.html web/shell/manifest.webmanifest web/dist/
           cp -R web/shell/i18n/. web/dist/i18n/
           cp web/shell/brotli_bg.wasm web/dist/
           cp web/shell/ice.json web/dist/
