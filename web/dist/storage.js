@@ -25,10 +25,23 @@ const GX_DB_META = 'meta';
 // Capability detection
 // ---------------------------------------------------------------------------
 
+function gxIsIOSLike() {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 async function gxDetectStorage() {
-  // ?storage=idb forces the IndexedDB fallback (testing / broken-OPFS escape hatch).
+  const isiOS = gxIsIOSLike();
+
+  // ?storage=idb is useful for desktop testing, but on iPhone/iPad it is unsafe
+  // for multi-GB installs: the engine must materialize every stored file into
+  // JS ArrayBuffers, which can terminate Safari under memory pressure.
   const forced = new URLSearchParams(location.search).get('storage');
   if (forced === 'idb') {
+    if (isiOS) {
+      throw new Error('iPhone/iPad memory protection: IndexedDB mode is disabled. Reload without ?storage=idb so the game can use OPFS.');
+    }
     console.warn('[storage] IndexedDB forced via ?storage=idb');
     return await IdbStorage.open();
   }
@@ -36,17 +49,22 @@ async function gxDetectStorage() {
   // browsers expose navigator.storage but fail on getDirectory).
   if (window.isSecureContext && navigator.storage && navigator.storage.getDirectory) {
     try {
-      // On iOS Safari a root write/delete probe can stall for a very long time
-      // when the origin already owns many GB of OPFS data. Opening the root is
-      // enough here; real writes still report their own errors later.
+      // iOS can take longer to reopen an origin that owns multiple GB. Give it
+      // extra time instead of incorrectly dropping into the RAM-heavy IDB path.
+      const opfsTimeoutMs = isiOS ? 20000 : 8000;
       const root = await Promise.race([
         navigator.storage.getDirectory(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('OPFS open timeout')), 8000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('OPFS open timeout')), opfsTimeoutMs)),
       ]);
       return new OpfsStorage(root);
     } catch (e) {
-      console.warn('[storage] OPFS open failed/timed out, falling back to IndexedDB:', e);
+      console.warn('[storage] OPFS open failed/timed out:', e);
+      if (isiOS) {
+        throw new Error('OPFS could not be opened on this iPhone/iPad. IndexedDB fallback was blocked to prevent a multi-GB RAM spike. Close other Safari tabs, reopen Safari, then try again.');
+      }
     }
+  } else if (isiOS) {
+    throw new Error('OPFS is unavailable on this iPhone/iPad. The RAM-heavy IndexedDB fallback is disabled for safety. Open the game in a current Safari secure tab.');
   }
   if (window.indexedDB) {
     const db = await IdbStorage.open();
