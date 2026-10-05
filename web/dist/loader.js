@@ -2,7 +2,7 @@
 // Safari dependency guard: keep the original loader in loader-core.js and
 // re-fetch game.js if an old/mixed tab reached the loader without gxPreloadEngine.
 (function () {
-  const v = 'save-load-20261003-02';
+  const v = 'ios-peak-ui-20261006-01';
   function write(src) {
     document.write('<script src="' + src + '"><\/script>');
   }
@@ -13,5 +13,7 @@
   // Keep mobile SAVE/LOAD in a separate bridge so camera/SELECT gesture code
   // is not changed by quick-save/quick-load fixes.
   write('mobile-save-load.js?v=' + v);
+  // iPhone/iPad: compact controls + lower temporary WASM preload peak memory.
+  write('mobile-runtime-fixes.js?v=' + v);
   write('loader-core.js?v=' + v);
 })();
