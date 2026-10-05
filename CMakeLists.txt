@@ -50,6 +50,9 @@ include(cmake/compilers.cmake)
 # Emscripten (WebAssembly) build: global flags + header-only deps normally
 # provided by vcpkg. Self-guarded with if(NOT EMSCRIPTEN) return().
 include(cmake/emscripten.cmake)
+# iPhone/iPad Safari: override only the initial heap after the generic web
+# flags. ALLOW_MEMORY_GROWTH remains enabled, so the engine can grow on demand.
+include(cmake/ios-safari-memory.cmake)
 
 # Debug symbol stripping for Release builds (MinGW)
 include(cmake/debug_strip.cmake)
