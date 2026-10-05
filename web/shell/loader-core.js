@@ -284,22 +284,97 @@ function gxLocalRelativePath(file) {
 async function gxImportCombinedZip(storage, zipFile) {
   if (!zipFile) throw new Error('Select a ZIP file.');
   if (!('DecompressionStream' in window)) throw new Error('This Safari version cannot unpack ZIP files.');
-  const u8=new Uint8Array(await zipFile.arrayBuffer());
-  const dv=new DataView(u8.buffer); const entries=[]; let p=0;
-  while(p+30<=u8.length && dv.getUint32(p,true)===0x04034b50){
-    const flags=dv.getUint16(p+6,true), method=dv.getUint16(p+8,true), csize=dv.getUint32(p+18,true), usize=dv.getUint32(p+22,true), nl=dv.getUint16(p+26,true), xl=dv.getUint16(p+28,true);
-    if(flags&8) throw new Error('ZIP uses data descriptors; recreate it with standard ZIP settings.');
-    const name=new TextDecoder().decode(u8.subarray(p+30,p+30+nl)).replace(/\\/g,'/'); const start=p+30+nl+xl;
-    if(!name.endsWith('/')) entries.push({name,method,csize,usize,start}); p=start+csize;
-  }
-  const rootFor=re=>{const e=entries.find(x=>re.test(x.name)); if(!e)return null; return e.name.slice(0,e.name.lastIndexOf('/')+1);};
-  const zhRoot=rootFor(/(^|\/)INIZH\.big$/i), baseRoot=rootFor(/(^|\/)(Terrain|Textures|W3D)\.big$/i);
-  if(zhRoot===null||baseRoot===null||zhRoot===baseRoot) throw new Error('ZIP must contain separate Generals and Zero Hour folders.');
-  const chosen=entries.filter(x=>x.name.startsWith(zhRoot)||x.name.startsWith(baseRoot)); let done=0,zhCount=0,baseCount=0; const total=chosen.reduce((n,x)=>n+x.usize,0); gxUI.download(0,total); if(storage.requestPersist) await storage.requestPersist();
-  for(let i=0;i<chosen.length;i++){const e=chosen[i]; let path=e.name.startsWith(zhRoot)?e.name.slice(zhRoot.length):'GameDataGenerals/'+e.name.slice(baseRoot.length); if(!path||path.includes('../'))continue; let blob=new Blob([u8.slice(e.start,e.start+e.csize)]); if(e.method===8){blob=await new Response(blob.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();} else if(e.method!==0) throw new Error('Unsupported ZIP compression method '+e.method+' for '+e.name); await storage.writeBlob(path,blob); done+=blob.size; e.name.startsWith(zhRoot)?zhCount++:baseCount++; gxUI.download(done,total,'Unpacking ZIP '+(i+1)+' / '+chosen.length+': '+path); gxUI.unpack(i+1,chosen.length); if((i&3)===3)await new Promise(r=>setTimeout(r,0));}
-  await storage.writeMeta('installed-default_ru',{complete:true,files:zhCount,ts:Date.now(),source:'combined-zip'}); await storage.writeMeta('installed-base-generals',{complete:true,files:baseCount,ts:Date.now(),source:'combined-zip'}); return {files:chosen.length,bytes:done,zhCount,baseCount};
-}
 
+  // Parse the ZIP central directory from a small tail slice. Never call
+  // zipFile.arrayBuffer() here: owned installs can be multi-GB and iOS Safari
+  // otherwise briefly keeps the entire archive in RAM.
+  const tailSize = Math.min(zipFile.size, 65557); // EOCD + max comment
+  const tailOffset = zipFile.size - tailSize;
+  const tail = new Uint8Array(await zipFile.slice(tailOffset).arrayBuffer());
+  const tailDv = new DataView(tail.buffer, tail.byteOffset, tail.byteLength);
+  let eocd = -1;
+  for (let i = tail.length - 22; i >= 0; --i) {
+    if (tailDv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('Invalid ZIP: end-of-central-directory not found.');
+
+  const entryCount = tailDv.getUint16(eocd + 10, true);
+  const cdSize = tailDv.getUint32(eocd + 12, true);
+  const cdOffset = tailDv.getUint32(eocd + 16, true);
+  if (entryCount === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff)
+    throw new Error('ZIP64 archives are not supported yet. Use a standard ZIP smaller than 4 GB.');
+
+  const cd = new Uint8Array(await zipFile.slice(cdOffset, cdOffset + cdSize).arrayBuffer());
+  const cdDv = new DataView(cd.buffer, cd.byteOffset, cd.byteLength);
+  const decoder = new TextDecoder();
+  const entries = [];
+  let p = 0;
+  while (p + 46 <= cd.length && cdDv.getUint32(p, true) === 0x02014b50) {
+    const flags = cdDv.getUint16(p + 8, true);
+    const method = cdDv.getUint16(p + 10, true);
+    const csize = cdDv.getUint32(p + 20, true);
+    const usize = cdDv.getUint32(p + 24, true);
+    const nl = cdDv.getUint16(p + 28, true);
+    const xl = cdDv.getUint16(p + 30, true);
+    const cl = cdDv.getUint16(p + 32, true);
+    const localOffset = cdDv.getUint32(p + 42, true);
+    const name = decoder.decode(cd.subarray(p + 46, p + 46 + nl)).replace(/\\/g, '/');
+    if (!name.endsWith('/')) entries.push({ name, flags, method, csize, usize, localOffset });
+    p += 46 + nl + xl + cl;
+  }
+  if (!entries.length) throw new Error('ZIP contains no files.');
+
+  const rootFor = re => {
+    const e = entries.find(x => re.test(x.name));
+    return e ? e.name.slice(0, e.name.lastIndexOf('/') + 1) : null;
+  };
+  const zhRoot = rootFor(/(^|\/)INIZH\.big$/i);
+  const baseRoot = rootFor(/(^|\/)(Terrain|Textures|W3D)\.big$/i);
+  if (zhRoot === null || baseRoot === null || zhRoot === baseRoot)
+    throw new Error('ZIP must contain separate Generals and Zero Hour folders.');
+
+  const chosen = entries.filter(x => x.name.startsWith(zhRoot) || x.name.startsWith(baseRoot));
+  let done = 0, zhCount = 0, baseCount = 0;
+  const total = chosen.reduce((n, x) => n + x.usize, 0);
+  gxUI.download(0, total);
+  if (storage.requestPersist) await storage.requestPersist();
+
+  for (let i = 0; i < chosen.length; i++) {
+    const e = chosen[i];
+    let path = e.name.startsWith(zhRoot)
+      ? e.name.slice(zhRoot.length)
+      : 'GameDataGenerals/' + e.name.slice(baseRoot.length);
+    if (!path || path.includes('../')) continue;
+    if (e.flags & 1) throw new Error('Encrypted ZIP entries are not supported: ' + e.name);
+    if (e.method !== 0 && e.method !== 8)
+      throw new Error('Unsupported ZIP compression method ' + e.method + ' for ' + e.name);
+
+    // Only read the 30-byte local header plus this entry's compressed byte
+    // range. The File/Blob remains backed by browser storage instead of RAM.
+    const lh = new DataView(await zipFile.slice(e.localOffset, e.localOffset + 30).arrayBuffer());
+    if (lh.byteLength < 30 || lh.getUint32(0, true) !== 0x04034b50)
+      throw new Error('Invalid ZIP local header for ' + e.name);
+    const localNl = lh.getUint16(26, true);
+    const localXl = lh.getUint16(28, true);
+    const dataStart = e.localOffset + 30 + localNl + localXl;
+    const compressed = zipFile.slice(dataStart, dataStart + e.csize);
+    let stream = compressed.stream();
+    if (e.method === 8) stream = stream.pipeThrough(new DecompressionStream('deflate-raw'));
+
+    // OPFS writes chunks directly to disk. IDB keeps its existing fallback
+    // semantics, but still avoids retaining the entire source ZIP in memory.
+    const written = await storage.writeStream(path, new Response(stream));
+    done += written;
+    e.name.startsWith(zhRoot) ? zhCount++ : baseCount++;
+    gxUI.download(done, total, 'Unpacking ZIP ' + (i + 1) + ' / ' + chosen.length + ': ' + path);
+    gxUI.unpack(i + 1, chosen.length);
+    if ((i & 3) === 3) await new Promise(r => setTimeout(r, 0));
+  }
+
+  await storage.writeMeta('installed-default_ru', { complete: true, files: zhCount, ts: Date.now(), source: 'combined-zip' });
+  await storage.writeMeta('installed-base-generals', { complete: true, files: baseCount, ts: Date.now(), source: 'combined-zip' });
+  return { files: chosen.length, bytes: done, zhCount, baseCount };
+}
 async function gxImportCombinedFolder(storage, files) {
   const list = Array.from(files || []).filter(f => f && f.size >= 0);
   if (!list.length) throw new Error('No files selected.');
