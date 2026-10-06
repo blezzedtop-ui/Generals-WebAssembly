@@ -59,6 +59,38 @@
 #include "WW3D2/htree.h"
 #include "WW3D2/animobj.h"  ///< @todo superhack for demo, remove!
 
+#ifdef __EMSCRIPTEN__
+namespace
+{
+// Safari has a much tighter practical memory ceiling than desktop browsers.
+// Keep only *unused* texture cache under a conservative soft limit.  We never
+// evict textures that have live references, so active terrain/models keep
+// their graphics. Model prototypes are intentionally not hard-evicted while
+// a map is running because that cache has no ownership-safe live eviction API.
+constexpr unsigned long long WEB_UNUSED_TEXTURE_SOFT_LIMIT = 96ull * 1024ull * 1024ull;
+constexpr UnsignedInt WEB_CACHE_CHECK_FRAMES = 300;
+
+void webTrimUnusedAssetCache()
+{
+	WW3DAssetManager *assetManager = WW3DAssetManager::Get_Instance();
+	if (assetManager == nullptr)
+		return;
+
+	unsigned long long unusedTextureBytes = 0;
+	HashTemplateIterator<StringClass, TextureClass *> textureIt(assetManager->Texture_Hash());
+	for (textureIt.First(); !textureIt.Is_Done(); textureIt.Next())
+	{
+		TextureClass *texture = textureIt.Peek_Value();
+		if (texture != nullptr && texture->Num_Refs() <= 1)
+			unusedTextureBytes += texture->Get_Texture_Memory_Usage();
+	}
+
+	if (unusedTextureBytes > WEB_UNUSED_TEXTURE_SOFT_LIMIT)
+		assetManager->Release_Unused_Assets();
+}
+}
+#endif
+
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
 W3DGameClient::W3DGameClient()
@@ -93,6 +125,17 @@ void W3DGameClient::update()
 	// call base
 	GameClient::update();
 
+#ifdef __EMSCRIPTEN__
+	// Check infrequently to avoid per-frame cache-walk overhead.  The trim itself
+	// is ref-count safe and only runs when unused texture memory exceeds the cap.
+	static UnsignedInt webCacheCheckFrame = 0;
+	if (++webCacheCheckFrame >= WEB_CACHE_CHECK_FRAMES)
+	{
+		webCacheCheckFrame = 0;
+		webTrimUnusedAssetCache();
+	}
+#endif
+
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -102,8 +145,16 @@ void W3DGameClient::update()
 void W3DGameClient::reset()
 {
 
-	// call base class
+	// Base reset destroys map drawables and resets display/terrain first.
 	GameClient::reset();
+
+#ifdef __EMSCRIPTEN__
+	// Once map-owned drawables are gone, release only assets that no live object
+	// references anymore.  This is deliberately not Free_Assets(): active/global
+	// model prototypes are never blindly destroyed, preventing purple/missing art.
+	if (WW3DAssetManager::Get_Instance() != nullptr)
+		WW3DAssetManager::Get_Instance()->Release_Unused_Assets();
+#endif
 
 }
 
