@@ -147,6 +147,73 @@ function gxEngineStage(message) {
   if (d) d.textContent = message;
 }
 
+// Shows the Emscripten linear-memory capacity, not total browser/iPhone RAM.
+// Safari does not expose a reliable cross-browser "RAM used" number, so the
+// label intentionally says WASM linear memory.  The stats object is also
+// exposed for diagnostics without scraping the badge.
+function gxInstallMemoryMonitor() {
+  if (window.gxMemoryMonitorTimer) return;
+
+  let badge = document.getElementById('gx-memory-monitor');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'gx-memory-monitor';
+    Object.assign(badge.style, {
+      position: 'fixed',
+      left: 'max(6px, env(safe-area-inset-left))',
+      bottom: 'max(6px, env(safe-area-inset-bottom))',
+      zIndex: '99999',
+      pointerEvents: 'none',
+      padding: '3px 6px',
+      borderRadius: '5px',
+      background: 'rgba(0,0,0,.58)',
+      color: '#fff',
+      font: '11px/1.2 system-ui,-apple-system,sans-serif',
+      fontVariantNumeric: 'tabular-nums'
+    });
+    document.body.appendChild(badge);
+  }
+
+  let lastBytes = -1;
+  const sample = () => {
+    let heap = null;
+    try {
+      if (window.Module && window.Module.HEAPU8) heap = window.Module.HEAPU8;
+      else if (typeof HEAPU8 !== 'undefined') heap = HEAPU8;
+    } catch {}
+
+    const bytes = heap && heap.buffer ? heap.buffer.byteLength : 0;
+    const mib = Math.round((bytes / (1024 * 1024)) * 10) / 10;
+    const stats = {
+      linearMemoryBytes: bytes,
+      linearMemoryMiB: mib,
+      sampledAt: Date.now()
+    };
+    window.gxMemoryStats = stats;
+    badge.textContent = bytes ? `WASM linear ${mib} MB` : 'WASM linear —';
+
+    if (bytes !== lastBytes) {
+      lastBytes = bytes;
+      if (bytes) console.log('[memory] WASM linear memory', mib, 'MiB');
+    }
+    try { window.dispatchEvent(new CustomEvent('gx-memory-stats', { detail: stats })); } catch {}
+  };
+
+  sample();
+  window.gxMemoryMonitorTimer = setInterval(sample, 2000);
+}
+
+// The preloaded wasm byte array is only needed until WebAssembly instantiation
+// completes.  Drop every reachable bootstrap reference afterwards so Safari's
+// GC can reclaim that duplicate copy while the compiled module keeps running.
+function gxReleaseBootstrapWasm() {
+  try { window.gxEngine.wasmBinary = null; } catch {}
+  try { if (window.Module) window.Module.wasmBinary = null; } catch {}
+  // Emscripten currently exposes a top-level wasmBinary binding.  This is a
+  // best-effort release for generated glue versions where it remains mutable.
+  try { if (typeof wasmBinary !== 'undefined') wasmBinary = null; } catch {}
+}
+
 async function gxStartGame() {
   gxEngineStage('4/9 Engine ishga tushirilmoqda…');
   // Engine wasm was pre-downloaded by gxPreloadEngine() into window.gxEngine.
@@ -190,6 +257,8 @@ async function gxStartGame() {
       },
       onRuntimeInitialized: () => {
         gxEngineStage('5/9 WASM runtime tayyor…');
+        gxReleaseBootstrapWasm();
+        gxInstallMemoryMonitor();
         console.log('[game] runtime initialized');
         resolve();
       },
