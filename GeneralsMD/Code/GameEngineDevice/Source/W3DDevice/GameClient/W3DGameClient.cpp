@@ -71,8 +71,8 @@ namespace
 // their graphics. Model prototypes are intentionally not hard-evicted while
 // a map is running because that cache has no ownership-safe live eviction API.
 constexpr unsigned long long WEB_BYTES_PER_MB = 1024ull * 1024ull;
-constexpr unsigned long long WEB_UNUSED_TEXTURE_SOFT_LIMIT = 96ull * WEB_BYTES_PER_MB;
-constexpr UnsignedInt WEB_CACHE_CHECK_FRAMES = 300;
+constexpr unsigned long long WEB_UNUSED_TEXTURE_SOFT_LIMIT = 64ull * WEB_BYTES_PER_MB;
+constexpr UnsignedInt WEB_CACHE_CHECK_FRAMES = 120;
 
 unsigned long long webGetUnusedTextureBytes()
 {
@@ -159,8 +159,9 @@ void W3DGameClient::update()
 	GameClient::update();
 
 #ifdef __EMSCRIPTEN__
-	// Check infrequently to avoid per-frame cache-walk overhead.  The trim itself
-	// is ref-count safe and only runs when unused texture memory exceeds the cap.
+	// Check often enough to trim disposable texture cache before iOS Safari gets
+	// close to killing the tab. The trim is ref-count safe and never touches live
+	// terrain/model textures.
 	static UnsignedInt webCacheCheckFrame = 0;
 	if (++webCacheCheckFrame >= WEB_CACHE_CHECK_FRAMES)
 	{
@@ -242,7 +243,10 @@ void W3DGameClient::createRayEffectByTemplate( const Coord3D *start,
 		pos.z = (end->z - start->z) * 0.5f + start->z;
 		draw->setPosition( &pos );
 
-		// add this ray effect to the list of ray effects
+		// add to world, the location of the drawable is at the midpoint of laser
+		draw->setPosition( &pos );
+
+		// add to the ray effect list
 		TheRayEffects->addRayEffect( draw, start, end );
 
 	}
@@ -263,7 +267,7 @@ void W3DGameClient::setTimeOfDay( TimeOfDay tod )
 	if (TheW3DShadowManager)
 		TheW3DShadowManager->setTimeOfDay(tod);
 
-	//tell the display to update its lighting
+	//tell display it is time for a change
 	TheDisplay->setTimeOfDay( tod );
 
 }
@@ -302,4 +306,3 @@ void W3DGameClient::notifyTerrainObjectMoved(Object *obj)
 	}
 
 }
-
