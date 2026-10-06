@@ -35,6 +35,9 @@
 
 // SYSTEM INCLUDES ////////////////////////////////////////////////////////////
 #include <stdlib.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
 
 // USER INCLUDES //////////////////////////////////////////////////////////////
 
@@ -67,14 +70,15 @@ namespace
 // evict textures that have live references, so active terrain/models keep
 // their graphics. Model prototypes are intentionally not hard-evicted while
 // a map is running because that cache has no ownership-safe live eviction API.
-constexpr unsigned long long WEB_UNUSED_TEXTURE_SOFT_LIMIT = 96ull * 1024ull * 1024ull;
+constexpr unsigned long long WEB_BYTES_PER_MB = 1024ull * 1024ull;
+constexpr unsigned long long WEB_UNUSED_TEXTURE_SOFT_LIMIT = 96ull * WEB_BYTES_PER_MB;
 constexpr UnsignedInt WEB_CACHE_CHECK_FRAMES = 300;
 
-void webTrimUnusedAssetCache()
+unsigned long long webGetUnusedTextureBytes()
 {
 	WW3DAssetManager *assetManager = WW3DAssetManager::Get_Instance();
 	if (assetManager == nullptr)
-		return;
+		return 0;
 
 	unsigned long long unusedTextureBytes = 0;
 	HashTemplateIterator<StringClass, TextureClass *> textureIt(assetManager->Texture_Hash());
@@ -85,8 +89,37 @@ void webTrimUnusedAssetCache()
 			unusedTextureBytes += texture->Get_Texture_Memory_Usage();
 	}
 
-	if (unusedTextureBytes > WEB_UNUSED_TEXTURE_SOFT_LIMIT)
+	return unusedTextureBytes;
+}
+
+void webReleaseUnusedAssets()
+{
+	WW3DAssetManager *assetManager = WW3DAssetManager::Get_Instance();
+	if (assetManager != nullptr)
 		assetManager->Release_Unused_Assets();
+}
+
+void webTrimUnusedAssetCache()
+{
+	if (webGetUnusedTextureBytes() > WEB_UNUSED_TEXTURE_SOFT_LIMIT)
+		webReleaseUnusedAssets();
+}
+}
+
+extern "C"
+{
+// JavaScript bridge for the mobile RAM controls.  Values are returned in MB
+// so the ABI stays i32-friendly on wasm32 and Safari does not need BigInt.
+EMSCRIPTEN_KEEPALIVE UnsignedInt gxWebGetUnusedTextureMB()
+{
+	return static_cast<UnsignedInt>(webGetUnusedTextureBytes() / WEB_BYTES_PER_MB);
+}
+
+EMSCRIPTEN_KEEPALIVE UnsignedInt gxWebReleaseUnusedAssets()
+{
+	const UnsignedInt unusedBefore = gxWebGetUnusedTextureMB();
+	webReleaseUnusedAssets();
+	return unusedBefore;
 }
 }
 #endif
@@ -152,8 +185,7 @@ void W3DGameClient::reset()
 	// Once map-owned drawables are gone, release only assets that no live object
 	// references anymore.  This is deliberately not Free_Assets(): active/global
 	// model prototypes are never blindly destroyed, preventing purple/missing art.
-	if (WW3DAssetManager::Get_Instance() != nullptr)
-		WW3DAssetManager::Get_Instance()->Release_Unused_Assets();
+	webReleaseUnusedAssets();
 #endif
 
 }
@@ -270,5 +302,4 @@ void W3DGameClient::notifyTerrainObjectMoved(Object *obj)
 	}
 
 }
-
 
