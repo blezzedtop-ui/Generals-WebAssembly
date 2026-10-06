@@ -243,9 +243,6 @@ void W3DGameClient::createRayEffectByTemplate( const Coord3D *start,
 		pos.z = (end->z - start->z) * 0.5f + start->z;
 		draw->setPosition( &pos );
 
-		// add to world, the location of the drawable is at the midpoint of laser
-		draw->setPosition( &pos );
-
 		// add to the ray effect list
 		TheRayEffects->addRayEffect( draw, start, end );
 
