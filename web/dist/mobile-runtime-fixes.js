@@ -5,6 +5,7 @@
   const isTouch = navigator.maxTouchPoints > 0;
   if (!isTouch) return;
 
+  // UI-only override. Keep SAVE/LOAD at the upper-right and shrink the rest.
   const style = document.createElement('style');
   style.id = 'gx-mobile-compact-20261006';
   style.textContent = `
@@ -18,6 +19,9 @@
   `;
   document.head.appendChild(style);
 
+  // The old preloader retained every network chunk and then allocated another
+  // full-size Uint8Array. On iPhone this can briefly use ~2x the WASM file size.
+  // If Content-Length is available, write directly into one final buffer.
   if (typeof window.gxPreloadEngine === 'function') {
     window.gxPreloadEngine = async function gxPreloadEngineLowPeak(onProgress) {
       let buildId = 'dev';
@@ -44,6 +48,8 @@
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
+          // If a server reports an incorrect smaller Content-Length, grow only
+          // when necessary instead of keeping a second permanent chunk list.
           if (received + value.byteLength > bin.byteLength) {
             const grown = new Uint8Array(Math.max(received + value.byteLength, bin.byteLength * 2));
             grown.set(bin.subarray(0, received));
@@ -55,6 +61,8 @@
         }
         window.gxEngine.wasmBinary = received === bin.byteLength ? bin : bin.slice(0, received);
       } else {
+        // Rare fallback for hosts without Content-Length. Keep chunks bounded to
+        // this path only; normal Vercel responses use the single-buffer path.
         const chunks = [];
         for (;;) {
           const { done, value } = await reader.read();
@@ -71,6 +79,8 @@
     };
   }
 
+  // Once Emscripten has initialized, the compiled module owns what it needs.
+  // Drop the JS references so Safari can reclaim the source WASM byte buffer.
   if (typeof window.gxStartGame === 'function') {
     const startGame = window.gxStartGame;
     window.gxStartGame = async function gxStartGameLowPeak() {
