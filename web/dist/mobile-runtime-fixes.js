@@ -6,14 +6,15 @@
   if (!isTouch) return;
 
   const MB = 1024 * 1024;
-  const AUTO_CLEAN_CACHE_MB = 96;
-  const AUTO_CLEAN_COOLDOWN_MS = 15000;
+  const AUTO_CLEAN_CACHE_MB = 64;
+  const AUTO_CLEAN_COOLDOWN_MS = 8000;
   let lastAutoCleanAt = 0;
   let cleanupResetTimer = 0;
+  let lastWasmCapacityMB = 0;
 
   // UI-only override. Keep SAVE/LOAD at the upper-right and shrink the rest.
   const style = document.createElement('style');
-  style.id = 'gx-mobile-compact-20261006';
+  style.id = 'gx-mobile-compact-20261007';
   style.textContent = `
     #gx-mobile-controls button{width:44px!important;height:44px!important;font-size:16px!important}
     #gx-m-esc{left:max(12px,env(safe-area-inset-left))!important;top:max(12px,env(safe-area-inset-top))!important;width:40px!important;height:32px!important;border-radius:8px!important;font-size:10px!important}
@@ -97,9 +98,16 @@
     ui.clean.style.opacity = nativeReady ? '1' : '.55';
     ui.status.textContent = `WASM ${heapMB || '--'}M | CACHE ${cacheMB >= 0 ? cacheMB + 'M' : '--'}`;
 
-    // Native code also checks every 300 frames. This timer is a backup for
-    // cases where rendering gets slow but the browser event loop still runs.
-    if (nativeReady && cacheMB >= AUTO_CLEAN_CACHE_MB && Date.now() - lastAutoCleanAt >= AUTO_CLEAN_COOLDOWN_MS) {
+    const now = Date.now();
+    const heapJustGrew = lastWasmCapacityMB > 0 && heapMB > lastWasmCapacityMB;
+    if (heapMB > 0) lastWasmCapacityMB = heapMB;
+
+    // Native code checks every 120 frames. This timer is a second guard for
+    // slow-rendering situations. We trim on 64 MB of disposable texture cache,
+    // and also immediately after WASM grows so freed blocks can be reused before
+    // another growth pushes Safari closer to its per-tab memory ceiling.
+    if (nativeReady && now - lastAutoCleanAt >= AUTO_CLEAN_COOLDOWN_MS &&
+        (cacheMB >= AUTO_CLEAN_CACHE_MB || (heapJustGrew && cacheMB > 0))) {
       runCleanup(true);
     }
   }
@@ -132,7 +140,7 @@
   function startRamMonitor() {
     ensureRamControls();
     updateRamStatus();
-    setInterval(updateRamStatus, 3000);
+    setInterval(updateRamStatus, 2000);
   }
 
   if (document.readyState === 'loading') {
@@ -144,7 +152,7 @@
   // Do not pre-download GeneralsXZH.wasm into a JS Uint8Array on mobile.
   // The generated Emscripten glue already uses WebAssembly.instantiateStreaming
   // when Module.wasmBinary is absent. That avoids keeping an ~80 MB source-WASM
-  // buffer alive at the same time as the 512 MB shared linear memory.
+  // buffer alive at the same time as the shared linear memory.
   if (typeof window.gxPreloadEngine === 'function') {
     window.gxPreloadEngine = async function gxPreloadEngineStreaming(onProgress) {
       let buildId = 'dev';

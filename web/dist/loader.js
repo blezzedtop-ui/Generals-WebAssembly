@@ -2,7 +2,7 @@
 // Safari dependency guard: keep the original loader in loader-core.js and
 // re-fetch game.js if an old/mixed tab reached the loader without gxPreloadEngine.
 (function () {
-  const v = 'ios-ram-clean-20261006-03';
+  const v = 'ios-oom-guard-20261007-04';
   function write(src) {
     document.write('<script src="' + src + '"><\/script>');
   }
@@ -13,7 +13,7 @@
   // Keep mobile SAVE/LOAD in a separate bridge so camera/SELECT gesture code
   // is not changed by quick-save/quick-load fixes.
   write('mobile-save-load.js?v=' + v);
-  // iPhone/iPad: compact controls + streamed WASM startup + live RAM cleanup.
+  // iPhone/iPad: compact controls + streamed WASM startup + early RAM cleanup.
   write('mobile-runtime-fixes.js?v=' + v);
   write('loader-core.js?v=' + v);
 })();
