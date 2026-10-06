@@ -1,6 +1,6 @@
 'use strict';
-// iPhone Safari runtime fixes: lower temporary WASM peak memory and keep the
-// touch UI compact without changing game/control logic.
+// iPhone/iPad runtime fixes: keep the touch UI compact and avoid retaining a
+// second full WASM copy in JavaScript before Emscripten starts.
 (function () {
   const isTouch = navigator.maxTouchPoints > 0;
   if (!isTouch) return;
@@ -19,68 +19,30 @@
   `;
   document.head.appendChild(style);
 
-  // The old preloader retained every network chunk and then allocated another
-  // full-size Uint8Array. On iPhone this can briefly use ~2x the WASM file size.
-  // If Content-Length is available, write directly into one final buffer.
+  // Do not pre-download GeneralsXZH.wasm into a JS Uint8Array on mobile.
+  // The generated Emscripten glue already uses WebAssembly.instantiateStreaming
+  // when Module.wasmBinary is absent. That avoids keeping an ~80 MB source-WASM
+  // buffer alive at the same time as the 512 MB shared linear memory.
   if (typeof window.gxPreloadEngine === 'function') {
-    window.gxPreloadEngine = async function gxPreloadEngineLowPeak(onProgress) {
+    window.gxPreloadEngine = async function gxPreloadEngineStreaming(onProgress) {
       let buildId = 'dev';
       try {
         const r = await fetch('build.json', { cache: 'no-cache' });
         if (r.ok) buildId = (await r.json()).buildId || 'dev';
       } catch {}
+
+      if (!window.gxEngine) window.gxEngine = { wasmBinary: null, buildId: 'dev' };
       window.gxEngine.buildId = buildId;
+      window.gxEngine.wasmBinary = null;
 
-      const resp = await fetch('GeneralsXZH.wasm?v=' + buildId);
-      if (!resp.ok) {
-        const msg = window.gxI18n?.t
-          ? window.gxI18n.t('error.engineHttp', { status: resp.status })
-          : ('Engine HTTP ' + resp.status);
-        throw new Error(msg);
-      }
-
-      const total = parseInt(resp.headers.get('Content-Length') || '0', 10) || 0;
-      const reader = resp.body.getReader();
-      let received = 0;
-
-      if (total > 0) {
-        let bin = new Uint8Array(total);
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          // If a server reports an incorrect smaller Content-Length, grow only
-          // when necessary instead of keeping a second permanent chunk list.
-          if (received + value.byteLength > bin.byteLength) {
-            const grown = new Uint8Array(Math.max(received + value.byteLength, bin.byteLength * 2));
-            grown.set(bin.subarray(0, received));
-            bin = grown;
-          }
-          bin.set(value, received);
-          received += value.byteLength;
-          if (onProgress) onProgress(received, total);
-        }
-        window.gxEngine.wasmBinary = received === bin.byteLength ? bin : bin.slice(0, received);
-      } else {
-        // Rare fallback for hosts without Content-Length. Keep chunks bounded to
-        // this path only; normal Vercel responses use the single-buffer path.
-        const chunks = [];
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          received += value.byteLength;
-          if (onProgress) onProgress(received, 0);
-        }
-        const bin = new Uint8Array(received);
-        let pos = 0;
-        for (const c of chunks) { bin.set(c, pos); pos += c.byteLength; }
-        window.gxEngine.wasmBinary = bin;
-      }
+      // Loader-core expects this callback, but the actual WASM transfer now
+      // happens inside Emscripten during gxStartGame().
+      if (onProgress) onProgress(0, 0);
+      console.log('[memory] mobile WASM preload skipped; using instantiateStreaming');
     };
   }
 
-  // Once Emscripten has initialized, the compiled module owns what it needs.
-  // Drop the JS references so Safari can reclaim the source WASM byte buffer.
+  // Keep the release guard as a fallback for stale tabs/mixed cached scripts.
   if (typeof window.gxStartGame === 'function') {
     const startGame = window.gxStartGame;
     window.gxStartGame = async function gxStartGameLowPeak() {
